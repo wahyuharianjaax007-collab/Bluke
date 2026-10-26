@@ -223,7 +223,15 @@ internal fun MediaPresentationView(
         }
     }
 
-    val resolvedPosture = postureOverride ?: MultimediaPosture.PORTRAIT_HELD
+    // Real orientation decides the layout: landscape = wide layout, portrait = upright layout.
+    // postureOverride is still honoured (used by screenshot tests).
+    val isLandscape = rememberIsLandscape()
+    val useUprightPortrait = postureOverride == null && !isLandscape
+    val resolvedPosture = postureOverride
+        ?: if (isLandscape) MultimediaPosture.LANDSCAPE else MultimediaPosture.PORTRAIT_HELD
+    if (postureOverride == null) {
+        RemoteSystemBars(isLandscape = isLandscape, baseColor = RemoteCanvasColor)
+    }
     val cycleSensitivity = {
         sensitivity = nextTouchpadSpeed(sensitivity)
         sharedPrefs.edit { putFloat("touchpad_sensitivity", sensitivity) }
@@ -249,8 +257,33 @@ internal fun MediaPresentationView(
         .background(RemoteCanvasColor)
         .testTag("media_presentation_view_root")
 
-    if (resolvedPosture == MultimediaPosture.LANDSCAPE) {
-        Column(modifier = rootModifier) {
+    if (useUprightPortrait) {
+        Column(modifier = rootModifier.remoteRootInsets()) {
+            MultimediaTopBar(
+                btManager = btManager,
+                onClose = onClose,
+                launchMode = launchMode,
+                onModeChange = onModeChange,
+                sharedPrefs = sharedPrefs,
+                isConnected = isConnected,
+                sensitivity = sensitivity,
+                onSensitivityChange = cycleSensitivity,
+                scrollSensitivity = scrollSensitivity,
+                onScrollSensitivityChange = cycleScrollSensitivity,
+                isVibrationEnabled = isVibrationEnabled,
+                onToggleVibration = toggleVibration,
+                twoLine = true,
+            )
+            MultimediaPortraitCanvas(
+                btManager = btManager,
+                sensitivity = sensitivity,
+                scrollSensitivity = scrollSensitivity,
+                triggerVibration = ::triggerVibration,
+                modifier = Modifier.weight(1f).fillMaxWidth(),
+            )
+        }
+    } else if (resolvedPosture == MultimediaPosture.LANDSCAPE) {
+        Column(modifier = rootModifier.remoteRootInsets()) {
             MultimediaTopBar(
                 btManager = btManager,
                 onClose = onClose,
@@ -296,6 +329,49 @@ internal fun MediaPresentationView(
                 triggerVibration = ::triggerVibration,
                 modifier = Modifier.weight(1f).fillMaxHeight(),
             )
+        }
+    }
+}
+
+@Composable
+private fun MultimediaPortraitCanvas(
+    btManager: BluetoothKeyboardManager,
+    sensitivity: Float,
+    scrollSensitivity: Float,
+    triggerVibration: (Long) -> Unit,
+    modifier: Modifier,
+) {
+    BoxWithConstraints(modifier = modifier.padding(horizontal = 12.dp, vertical = 10.dp)) {
+        val horizontalGap = 8.dp
+        val verticalGap = 8.dp
+        val deckGap = 16.dp
+        // Two 3-column decks (media keys | arrows) must fit the width on any phone.
+        val controlWidth = (((maxWidth - deckGap) / 2 - horizontalGap * 2) / 3).coerceIn(36.dp, 64.dp)
+        val controlHeight = (maxHeight * 0.075f).coerceIn(44.dp, 60.dp)
+        Column(
+            modifier = Modifier.fillMaxSize(),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            MultimediaButtonDeck(
+                btManager = btManager,
+                posture = MultimediaPosture.LANDSCAPE, // upright glyphs, no rotation
+                buttonWidth = controlWidth,
+                buttonHeight = controlHeight,
+                horizontalGap = horizontalGap,
+                verticalGap = verticalGap,
+                triggerVibration = triggerVibration,
+                modifier = Modifier.fillMaxWidth(),
+                centerContent = true,
+            )
+            SlideNavigationRow(btManager, Modifier.fillMaxWidth().height(48.dp), 8.dp, triggerVibration)
+            MultimediaTouchpad(
+                btManager,
+                sensitivity,
+                scrollSensitivity,
+                triggerVibration,
+                Modifier.weight(1f).fillMaxWidth(),
+            )
+            MouseButtonRow(btManager, Modifier.fillMaxWidth().height(52.dp), 8.dp, triggerVibration)
         }
     }
 }
@@ -375,11 +451,16 @@ private fun MultimediaButtonDeck(
     verticalGap: Dp,
     triggerVibration: (Long) -> Unit,
     modifier: Modifier,
+    centerContent: Boolean = false,
 ) {
     val contentRotation = if (posture == MultimediaPosture.PORTRAIT_HELD) -90f else 0f
     Row(
         modifier = modifier,
-        horizontalArrangement = Arrangement.spacedBy(horizontalGap * 3),
+        horizontalArrangement = if (centerContent) {
+            Arrangement.spacedBy(16.dp, Alignment.CenterHorizontally)
+        } else {
+            Arrangement.spacedBy(horizontalGap * 3)
+        },
         verticalAlignment = Alignment.CenterVertically,
     ) {
         val mediaRows = if (posture == MultimediaPosture.LANDSCAPE) {
@@ -859,6 +940,7 @@ private fun MultimediaTopBar(
     onScrollSensitivityChange: () -> Unit,
     isVibrationEnabled: Boolean,
     onToggleVibration: () -> Unit,
+    twoLine: Boolean = false,
 ) {
     val context = LocalContext.current
     val connectedDevice by btManager.connectedDevice.collectAsState()
@@ -867,84 +949,97 @@ private fun MultimediaTopBar(
     } catch (_: SecurityException) {
         if (isConnected) "Host" else "No Host"
     }
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(42.dp)
-            .background(Color.Black.copy(alpha = 0.45f))
-            .padding(horizontal = 8.dp, vertical = 4.dp),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            ToolbarPill(onClick = onClose) {
-                Icon(Icons.Default.Close, "Close", tint = Color.White, modifier = Modifier.size(12.dp))
-                Spacer(Modifier.width(4.dp))
-                Text("Close", color = Color.White, fontSize = 10.sp, fontWeight = FontWeight.Bold)
-            }
-            ToolbarPill(
-                onClick = {
-                    val enabled = sharedPrefs.enabledInputModes()
-                    val index = enabled.indexOfFirst { it.id == launchMode }.coerceAtLeast(0)
-                    onModeChange(enabled[(index + 1) % enabled.size].id)
-                },
-                onLongClick = {
-                    context.startActivity(Intent(context, QuickCycleActivity::class.java))
-                },
+    val barLeft: @Composable () -> Unit = {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                Icon(Icons.Default.Mouse, "Switch mode", tint = Color.White, modifier = Modifier.size(12.dp))
-                Spacer(Modifier.width(4.dp))
-                Text("Multimedia", color = Color.White, fontSize = 10.sp, fontWeight = FontWeight.Bold)
-            }
-            Box(
-                Modifier
-                    .size(7.dp)
-                    .clip(CircleShape)
-                    .background(if (isConnected) Color(0xFF39FF14) else Color(0xFFFF9800))
-                    .semantics {
-                        contentDescription = if (isConnected) "Host connected" else "Host offline"
+                ToolbarPill(onClick = onClose) {
+                    Icon(Icons.Default.Close, "Close", tint = Color.White, modifier = Modifier.size(12.dp))
+                    Spacer(Modifier.width(4.dp))
+                    Text("Close", color = Color.White, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                }
+                ToolbarPill(
+                    onClick = {
+                        val enabled = sharedPrefs.enabledInputModes()
+                        val index = enabled.indexOfFirst { it.id == launchMode }.coerceAtLeast(0)
+                        onModeChange(enabled[(index + 1) % enabled.size].id)
                     },
-            )
-            Text(hostLabel, color = Color.White, fontSize = 10.sp, fontWeight = FontWeight.Bold)
-            ReconnectHostButton(btManager, iconOnly = true)
-            if (!isConnected) {
-                Text("[offline]", color = Color.White.copy(alpha = 0.45f), fontSize = 9.sp)
-            }
-        }
-
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            ToolbarPill(onClick = onSensitivityChange) {
-                Icon(Icons.Default.Speed, "Sensitivity", tint = Color.White, modifier = Modifier.size(12.dp))
-                Spacer(Modifier.width(4.dp))
-                Text("${sensitivity}x", color = Color.White, fontSize = 9.sp, fontWeight = FontWeight.Bold)
-            }
-            ToolbarPill(onClick = onScrollSensitivityChange) {
-                Icon(Icons.Default.KeyboardArrowUp, "Scroll speed", tint = Color.White, modifier = Modifier.size(12.dp))
-                Spacer(Modifier.width(4.dp))
-                Text("${scrollSensitivity}x", color = Color.White, fontSize = 9.sp, fontWeight = FontWeight.Bold)
-            }
-            Surface(
-                onClick = onToggleVibration,
-                modifier = Modifier.size(28.dp),
-                shape = RoundedCornerShape(8.dp),
-                color = Color.White.copy(alpha = 0.15f),
-            ) {
-                Box(contentAlignment = Alignment.Center) {
-                    Icon(
-                        Icons.Default.Vibration,
-                        if (isVibrationEnabled) "Disable vibration" else "Enable vibration",
-                        tint = if (isVibrationEnabled) Color.White else Color.White.copy(alpha = 0.4f),
-                        modifier = Modifier.size(12.dp),
-                    )
+                    onLongClick = {
+                        context.startActivity(Intent(context, QuickCycleActivity::class.java))
+                    },
+                ) {
+                    Icon(Icons.Default.Mouse, "Switch mode", tint = Color.White, modifier = Modifier.size(12.dp))
+                    Spacer(Modifier.width(4.dp))
+                    Text("Multimedia", color = Color.White, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                }
+                Box(
+                    Modifier
+                        .size(7.dp)
+                        .clip(CircleShape)
+                        .background(if (isConnected) Color(0xFF39FF14) else Color(0xFFFF9800))
+                        .semantics {
+                            contentDescription = if (isConnected) "Host connected" else "Host offline"
+                        },
+                )
+                Text(hostLabel, color = Color.White, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                ReconnectHostButton(btManager, iconOnly = true)
+                if (!isConnected) {
+                    Text("[offline]", color = Color.White.copy(alpha = 0.45f), fontSize = 9.sp)
                 }
             }
+
+    }
+    val barRight: @Composable () -> Unit = {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                ToolbarPill(onClick = onSensitivityChange) {
+                    Icon(Icons.Default.Speed, "Sensitivity", tint = Color.White, modifier = Modifier.size(12.dp))
+                    Spacer(Modifier.width(4.dp))
+                    Text("${sensitivity}x", color = Color.White, fontSize = 9.sp, fontWeight = FontWeight.Bold)
+                }
+                ToolbarPill(onClick = onScrollSensitivityChange) {
+                    Icon(Icons.Default.KeyboardArrowUp, "Scroll speed", tint = Color.White, modifier = Modifier.size(12.dp))
+                    Spacer(Modifier.width(4.dp))
+                    Text("${scrollSensitivity}x", color = Color.White, fontSize = 9.sp, fontWeight = FontWeight.Bold)
+                }
+                Surface(
+                    onClick = onToggleVibration,
+                    modifier = Modifier.size(28.dp),
+                    shape = RoundedCornerShape(8.dp),
+                    color = Color.White.copy(alpha = 0.15f),
+                ) {
+                    Box(contentAlignment = Alignment.Center) {
+                        Icon(
+                            Icons.Default.Vibration,
+                            if (isVibrationEnabled) "Disable vibration" else "Enable vibration",
+                            tint = if (isVibrationEnabled) Color.White else Color.White.copy(alpha = 0.4f),
+                            modifier = Modifier.size(12.dp),
+                        )
+                    }
+                }
+            }
+    }
+    if (twoLine) {
+        RemoteTopBarFrame {
+            PortraitBarRow { barLeft() }
+            PortraitBarRow { barRight() }
         }
+    } else {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(42.dp)
+                .background(Color.Black.copy(alpha = 0.45f))
+                .padding(horizontal = 8.dp, vertical = 4.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+        barLeft()
+        barRight()
+    }
     }
 }
 

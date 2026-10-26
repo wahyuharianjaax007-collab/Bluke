@@ -44,6 +44,9 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.graphics.luminance
+import androidx.core.view.WindowCompat
+import androidx.core.view.WindowInsetsCompat
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -427,55 +430,27 @@ fun HomeScreen(
         }
     }
 
-    // Toggle orientation and full-screen layout helper automatically
-    LaunchedEffect(isKeyboardActive) {
+    // Allow portrait AND landscape. FULL_USER follows the system auto-rotate setting.
+    val isLandscape = rememberIsLandscape()
+    LaunchedEffect(Unit) {
         val activity = context as? Activity ?: return@LaunchedEffect
-        val window = activity.window ?: return@LaunchedEffect
-        if (isKeyboardActive) {
-            try {
-                activity.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
-            } catch (e: Exception) {
-                Log.e("HomeScreen", "Error setting orientation to landscape: ${e.message}")
-            }
-            // Hide System UI for immersive mechanical keypad experience
-            try {
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-                    window.insetsController?.hide(
-                        android.view.WindowInsets.Type.statusBars() or android.view.WindowInsets.Type.navigationBars()
-                    )
-                    window.insetsController?.systemBarsBehavior =
-                        android.view.WindowInsetsController.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
-                } else {
-                    @Suppress("DEPRECATION")
-                    window.decorView.systemUiVisibility = (
-                        View.SYSTEM_UI_FLAG_FULLSCREEN
-                        or View.SYSTEM_UI_FLAG_HIDE_NAVIGATION
-                        or View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
-                    )
-                }
-            } catch (e: Exception) {
-                Log.e("HomeScreen", "Error hiding system bars: ${e.message}")
-            }
-        } else {
-            try {
-                @Suppress("SourceLockedOrientationActivity")
-                activity.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
-            } catch (e: Exception) {
-                Log.e("HomeScreen", "Error setting orientation to portrait: ${e.message}")
-            }
-            // Show system UI normally in config mode
-            try {
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-                    window.insetsController?.show(
-                        android.view.WindowInsets.Type.statusBars() or android.view.WindowInsets.Type.navigationBars()
-                    )
-                } else {
-                    @Suppress("DEPRECATION")
-                    window.decorView.systemUiVisibility = View.SYSTEM_UI_FLAG_VISIBLE
-                }
-            } catch (e: Exception) {
-                Log.e("HomeScreen", "Error showing system bars: ${e.message}")
-            }
+        try {
+            activity.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_FULL_USER
+        } catch (e: Exception) {
+            Log.e("HomeScreen", "Error enabling auto-rotation: ${e.message}")
+        }
+    }
+
+    // Home / pairing screen: normal system bars, icon colour follows the app theme.
+    // (Keyboard, touchpad, gamepad and multimedia screens manage their own bars.)
+    if (!isKeyboardActive) {
+        val homeSurface = MaterialTheme.colorScheme.surface
+        SideEffect {
+            val window = (context as? Activity)?.window ?: return@SideEffect
+            val controller = WindowCompat.getInsetsController(window, view)
+            controller.show(WindowInsetsCompat.Type.systemBars())
+            controller.isAppearanceLightStatusBars = homeSurface.luminance() > 0.5f
+            controller.isAppearanceLightNavigationBars = homeSurface.luminance() > 0.5f
         }
     }
 
@@ -673,422 +648,437 @@ fun HomeScreen(
                     }
                 }
                 else -> {
-                    // Seamless full-screen canvas acting as the aluminum keyboard plate and chassis
+                    RemoteSystemBars(isLandscape = isLandscape, baseColor = caseColorVal)
+                    // Seamless canvas acting as the aluminum keyboard plate and chassis
                     Column(
                         modifier = Modifier
                             .fillMaxSize()
                             .background(caseBrush)
+                            .remoteRootInsets()
                             .padding(bottom = 6.dp),
                         verticalArrangement = Arrangement.SpaceBetween,
                         horizontalAlignment = Alignment.CenterHorizontally
                     ) {
-                        // 1. Sleek Frosted Glass Top Settings Bar (KBSim Web Style Toggles Toolbar)
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(38.dp)
-                                .background(Color.Black.copy(alpha = 0.45f))
-                                .padding(horizontal = 8.dp, vertical = 2.dp),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            // Left Section: Exit, Connection status and Reconnect Button
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(8.dp)
-                            ) {
-                                // Exit Button (Pill style to match other buttons)
+                        // 1. Top bar. Landscape: one line. Portrait: two lines under a status bar that uses the same colour.
+                        val keyboardBarLeft: @Composable () -> Unit = {
+                                // Left Section: Exit, Connection status and Reconnect Button
                                 Row(
-                                    modifier = Modifier
-                                        .height(28.dp)
-                                        .clip(RoundedCornerShape(6.dp))
-                                        .background(Color.White.copy(alpha = 0.15f))
-                                        .clickable { isKeyboardActive = false }
-                                        .padding(horizontal = 8.dp)
-                                        .testTag("exit_keyboard_btn"),
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Default.Close,
-                                        contentDescription = "Exit",
-                                        tint = Color.White,
-                                        modifier = Modifier.size(10.dp)
-                                    )
-                                    Spacer(modifier = Modifier.width(4.dp))
-                                    Text(
-                                        text = "Close",
-                                        color = Color.White,
-                                        fontSize = 9.sp,
-                                        fontWeight = FontWeight.Bold
-                                    )
-                                }
-
-                                // Rotating Mode Switcher
-                                Row(
-                                    modifier = Modifier
-                                        .height(28.dp)
-                                        .clip(RoundedCornerShape(6.dp))
-                                        .background(Color.White.copy(alpha = 0.15f))
-                                        .combinedClickable(
-                                            onClickLabel = "Next input mode",
-                                            onLongClickLabel = "Configure input mode cycle",
-                                            onClick = {
-                                                val enabledModes = sharedPrefs.enabledInputModes().map(InputMode::id)
-                                                val currentIndexInEnabled = enabledModes.indexOf(launchMode)
-                                                val nextIndex = (currentIndexInEnabled + 1) % enabledModes.size
-                                                val nextMode = enabledModes[nextIndex]
-                                                switchInputMode(nextMode)
-                                                if (isHapticsEnabled) {
-                                                    view.performHapticFeedback(android.view.HapticFeedbackConstants.LONG_PRESS)
-                                                }
-                                            },
-                                            onLongClick = {
-                                                context.startActivity(Intent(context, QuickCycleActivity::class.java))
-                                            },
-                                        )
-                                        .padding(horizontal = 8.dp)
-                                        .testTag("keyboard_mode_cycle_btn"),
                                     verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
                                 ) {
-                                    Icon(
-                                        imageVector = Icons.Default.Keyboard,
-                                        contentDescription = "Switch Mode",
-                                        tint = Color.White,
-                                        modifier = Modifier.size(11.dp)
-                                    )
-                                    Text(
-                                        text = "Keyboard Mode",
-                                        color = Color.White,
-                                        fontSize = 9.sp,
-                                        fontWeight = FontWeight.Bold
-                                    )
-                                }
-
-                                // Status LED and connection details
-                                val statusLedColor = if (isConnected) Color(0xFF39FF14) else Color(0xFFFF9800)
-                                // Use collected state (not .value) so UI reacts to changes from background
-                                val activeDevice = homeUiState.connectedDevice ?: lastConnectedDevice ?: btManager.getReconnectTarget()
-                                val deviceName = activeDevice?.name ?: "No Host"
-                                
-                                Box(
-                                    modifier = Modifier
-                                        .size(6.dp)
-                                        .clip(CircleShape)
-                                        .background(statusLedColor)
-                                )
-                                
-                                Text(
-                                    text = deviceName,
-                                    color = Color.White,
-                                    fontSize = 11.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    fontFamily = FontFamily.SansSerif
-                                )
-                                
-                                // Reconnect Button
-                                ReconnectHostButton(btManager)
-                            }
-
-                            // Right Section: lock LEDs indicators, configuration pills, and mute button
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(6.dp)
-                            ) {
-                                // 1. Keyboard Status Lock LEDs Panel
-                                Row(
-                                    modifier = Modifier
-                                        .height(28.dp)
-                                        .clip(RoundedCornerShape(6.dp))
-                                        .background(Color.White.copy(alpha = 0.15f))
-                                        .padding(horizontal = 8.dp),
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(10.dp)
-                                ) {
-                                    // CAPS
+                                    // Exit Button (Pill style to match other buttons)
                                     Row(
-                                        verticalAlignment = Alignment.CenterVertically,
-                                        horizontalArrangement = Arrangement.spacedBy(4.dp),
                                         modifier = Modifier
-                                            .clip(RoundedCornerShape(4.dp))
-                                            .clickable {
-                                                if (isConnected) {
-                                                    btManager.sendKey(0x39, true)
-                                                    btManager.sendKey(0x39, false)
-                                                    if (lockSyncMode == "device") {
-                                                        isCapsLockActive = !isCapsLockActive
-                                                    }
-                                                } else {
-                                                    isCapsLockActive = !isCapsLockActive
-                                                }
-                                            }
-                                            .padding(horizontal = 4.dp, vertical = 2.dp)
+                                            .height(28.dp)
+                                            .clip(RoundedCornerShape(6.dp))
+                                            .background(Color.White.copy(alpha = 0.15f))
+                                            .clickable { isKeyboardActive = false }
+                                            .padding(horizontal = 8.dp)
+                                            .testTag("exit_keyboard_btn"),
+                                        verticalAlignment = Alignment.CenterVertically
                                     ) {
-                                        Box(
-                                            modifier = Modifier
-                                                .size(5.dp)
-                                                .clip(CircleShape)
-                                                .background(if (isCapsLockActive) Color(0xFF39FF14) else Color.White.copy(alpha = 0.15f))
+                                        Icon(
+                                            imageVector = Icons.Default.Close,
+                                            contentDescription = "Exit",
+                                            tint = Color.White,
+                                            modifier = Modifier.size(10.dp)
                                         )
+                                        Spacer(modifier = Modifier.width(4.dp))
                                         Text(
-                                            text = "CAPS",
-                                            color = if (isCapsLockActive) Color.White else Color.White.copy(alpha = 0.4f),
-                                            fontSize = 8.sp,
-                                            fontWeight = FontWeight.Bold,
-                                            fontFamily = FontFamily.SansSerif,
-                                            style = androidx.compose.ui.text.TextStyle(
-                                                platformStyle = androidx.compose.ui.text.PlatformTextStyle(includeFontPadding = false)
-                                            )
+                                            text = "Close",
+                                            color = Color.White,
+                                            fontSize = 9.sp,
+                                            fontWeight = FontWeight.Bold
                                         )
                                     }
-                                    
-                                    // NUM
+
+                                    // Rotating Mode Switcher
                                     Row(
-                                        verticalAlignment = Alignment.CenterVertically,
-                                        horizontalArrangement = Arrangement.spacedBy(4.dp),
                                         modifier = Modifier
-                                            .clip(RoundedCornerShape(4.dp))
-                                            .clickable {
-                                                if (isConnected) {
-                                                    btManager.sendKey(0x53, true)
-                                                    btManager.sendKey(0x53, false)
-                                                    if (lockSyncMode == "device") {
-                                                        isNumLockActive = !isNumLockActive
+                                            .height(28.dp)
+                                            .clip(RoundedCornerShape(6.dp))
+                                            .background(Color.White.copy(alpha = 0.15f))
+                                            .combinedClickable(
+                                                onClickLabel = "Next input mode",
+                                                onLongClickLabel = "Configure input mode cycle",
+                                                onClick = {
+                                                    val enabledModes = sharedPrefs.enabledInputModes().map(InputMode::id)
+                                                    val currentIndexInEnabled = enabledModes.indexOf(launchMode)
+                                                    val nextIndex = (currentIndexInEnabled + 1) % enabledModes.size
+                                                    val nextMode = enabledModes[nextIndex]
+                                                    switchInputMode(nextMode)
+                                                    if (isHapticsEnabled) {
+                                                        view.performHapticFeedback(android.view.HapticFeedbackConstants.LONG_PRESS)
                                                     }
-                                                } else {
-                                                    isNumLockActive = !isNumLockActive
-                                                }
-                                            }
-                                            .padding(horizontal = 4.dp, vertical = 2.dp)
+                                                },
+                                                onLongClick = {
+                                                    context.startActivity(Intent(context, QuickCycleActivity::class.java))
+                                                },
+                                            )
+                                            .padding(horizontal = 8.dp)
+                                            .testTag("keyboard_mode_cycle_btn"),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(4.dp)
                                     ) {
-                                        Box(
-                                            modifier = Modifier
-                                                .size(5.dp)
-                                                .clip(CircleShape)
-                                                .background(if (isNumLockActive) Color(0xFF39FF14) else Color.White.copy(alpha = 0.15f))
+                                        Icon(
+                                            imageVector = Icons.Default.Keyboard,
+                                            contentDescription = "Switch Mode",
+                                            tint = Color.White,
+                                            modifier = Modifier.size(11.dp)
                                         )
                                         Text(
-                                            text = "NUM",
-                                            color = if (isNumLockActive) Color.White else Color.White.copy(alpha = 0.4f),
-                                            fontSize = 8.sp,
-                                            fontWeight = FontWeight.Bold,
-                                            fontFamily = FontFamily.SansSerif,
-                                            style = androidx.compose.ui.text.TextStyle(
-                                                platformStyle = androidx.compose.ui.text.PlatformTextStyle(includeFontPadding = false)
-                                            )
+                                            text = "Keyboard Mode",
+                                            color = Color.White,
+                                            fontSize = 9.sp,
+                                            fontWeight = FontWeight.Bold
                                         )
                                     }
-                                    
-                                    // SCR
-                                    Row(
-                                        verticalAlignment = Alignment.CenterVertically,
-                                        horizontalArrangement = Arrangement.spacedBy(4.dp),
-                                        modifier = Modifier
-                                            .clip(RoundedCornerShape(4.dp))
-                                            .clickable {
-                                                if (isConnected) {
-                                                    btManager.sendKey(0x47, true)
-                                                    btManager.sendKey(0x47, false)
-                                                    if (lockSyncMode == "device") {
-                                                        isScrollLockActive = !isScrollLockActive
-                                                    }
-                                                } else {
-                                                    isScrollLockActive = !isScrollLockActive
-                                                }
-                                            }
-                                            .padding(horizontal = 4.dp, vertical = 2.dp)
-                                    ) {
-                                        Box(
-                                            modifier = Modifier
-                                                .size(5.dp)
-                                                .clip(CircleShape)
-                                                .background(if (isScrollLockActive) Color(0xFF39FF14) else Color.White.copy(alpha = 0.15f))
-                                        )
-                                        Text(
-                                            text = "SCR",
-                                            color = if (isScrollLockActive) Color.White else Color.White.copy(alpha = 0.4f),
-                                            fontSize = 8.sp,
-                                            fontWeight = FontWeight.Bold,
-                                            fontFamily = FontFamily.SansSerif,
-                                            style = androidx.compose.ui.text.TextStyle(
-                                                platformStyle = androidx.compose.ui.text.PlatformTextStyle(includeFontPadding = false)
-                                            )
-                                        )
-                                    }
-                                }
 
-                                // 2. Layout Selector Pill
-                                Row(
-                                    modifier = Modifier
-                                        .height(28.dp)
-                                        .clip(RoundedCornerShape(6.dp))
-                                        .background(Color.White.copy(alpha = 0.15f))
-                                        .combinedClickable(
-                                            onClickLabel = "Next keyboard layout",
-                                            onLongClickLabel = "Configure keyboard layout cycle",
-                                            onClick = {
-                                                val savedSet = sharedPrefs.getStringSet(CYCLE_KEYBOARD_GEOMETRIES_PREFERENCE, null)
-                                                val enabledLayouts = if (savedSet == null) {
-                                                    KeyboardGeometry.entries
-                                                } else {
-                                                    KeyboardGeometry.entries.filter { savedSet.contains(it.name) }
-                                                }.ifEmpty { listOf(selectedGeometry) }
-                                                val currentIndexInEnabled = enabledLayouts.indexOf(selectedGeometry)
-                                                val nextIndex = if (currentIndexInEnabled < 0) 0 else (currentIndexInEnabled + 1) % enabledLayouts.size
-                                                selectedGeometry = enabledLayouts[nextIndex]
-                                                sharedPrefs.edit { putString(KEYBOARD_GEOMETRY_PREFERENCE, selectedGeometry.name) }
-                                                soundSynth.playPress()
-                                            },
-                                            onLongClick = {
-                                                context.startActivity(Intent(context, KeyboardLayoutsActivity::class.java))
-                                            },
-                                        )
-                                        .padding(horizontal = 8.dp),
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Default.Keyboard,
-                                        contentDescription = "Layout",
-                                        tint = Color.White.copy(alpha = 0.9f),
-                                        modifier = Modifier.size(10.dp)
-                                    )
-                                    Spacer(modifier = Modifier.width(4.dp))
-                                    Text(
-                                        text = selectedGeometry.displayName,
-                                        color = Color.White,
-                                        fontSize = 9.sp,
-                                        fontWeight = FontWeight.Bold,
-                                        maxLines = 1,
-                                        overflow = TextOverflow.Ellipsis,
-                                        modifier = Modifier.widthIn(max = 90.dp),
-                                    )
-                                }
-
-                                // 3. Switch Selector Pill
-                                Row(
-                                    modifier = Modifier
-                                        .height(28.dp)
-                                        .clip(RoundedCornerShape(6.dp))
-                                        .background(Color.White.copy(alpha = 0.15f))
-                                        .combinedClickable(
-                                            onClickLabel = "Next key sound",
-                                            onLongClickLabel = "Manage key sounds",
-                                            onClick = {
-                                                val enabledProfiles = soundCycleSelection(
-                                                    sharedPrefs,
-                                                    dev.arnv.bluke.sound.CustomSoundPackRepository(context).listPacks().map { it.id },
-                                                )
-                                                soundSynth.cycleSoundProfile(enabledProfiles)
-                                                currentSwitch = soundSynth.getCurrentSwitch()
-                                                currentSoundProfileName = soundSynth.getSelectedSoundProfileName()
-                                                soundSynth.playPress()
-                                            },
-                                            onLongClick = {
-                                                context.startActivity(Intent(context, SoundPacksActivity::class.java))
-                                            },
-                                        )
-                                        .padding(horizontal = 8.dp),
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Default.MusicNote,
-                                        contentDescription = "Switch",
-                                        tint = Color.White.copy(alpha = 0.9f),
-                                        modifier = Modifier.size(10.dp)
-                                    )
-                                    Spacer(modifier = Modifier.width(4.dp))
-                                    Text(
-                                        text = currentSoundProfileName,
-                                        color = Color.White,
-                                        fontSize = 9.sp,
-                                        fontWeight = FontWeight.Bold
-                                    )
-                                }
-
-                                // 4. Keyboard Theme Selector Pill
-                                Row(
-                                    modifier = Modifier
-                                        .height(28.dp)
-                                        .clip(RoundedCornerShape(6.dp))
-                                        .background(Color.White.copy(alpha = 0.15f))
-                                        .combinedClickable(
-                                            onClickLabel = "Next keyboard theme",
-                                            onLongClickLabel = "Customize keyboard themes",
-                                            onClick = {
-                                                val availableThemes = keyboardThemeRepository.allThemes()
-                                                val savedThemeIds = sharedPrefs.getStringSet(
-                                                    CYCLE_KEYBOARD_THEMES_PREFERENCE,
-                                                    null,
-                                                )
-                                                val enabledThemes = if (savedThemeIds == null) {
-                                                    availableThemes
-                                                } else {
-                                                    availableThemes.filter { theme -> theme.id in savedThemeIds }
-                                                }.ifEmpty { listOf(selectedKeyboardTheme) }
-                                                val currentIndex = enabledThemes.indexOfFirst {
-                                                    it.id == selectedKeyboardTheme.id
-                                                }
-                                                val nextIndex = if (currentIndex < 0) {
-                                                    0
-                                                } else {
-                                                    (currentIndex + 1) % enabledThemes.size
-                                                }
-                                                selectedKeyboardTheme = enabledThemes[nextIndex]
-                                                keyboardThemeRepository.selectTheme(selectedKeyboardTheme.id)
-                                                soundSynth.playPress()
-                                            },
-                                            onLongClick = {
-                                                context.startActivity(
-                                                    Intent(context, KeyboardThemesActivity::class.java),
-                                                )
-                                            },
-                                        )
-                                        .padding(horizontal = 8.dp),
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
+                                    // Status LED and connection details
+                                    val statusLedColor = if (isConnected) Color(0xFF39FF14) else Color(0xFFFF9800)
+                                    // Use collected state (not .value) so UI reacts to changes from background
+                                    val activeDevice = homeUiState.connectedDevice ?: lastConnectedDevice ?: btManager.getReconnectTarget()
+                                    val deviceName = activeDevice?.name ?: "No Host"
+                                
                                     Box(
                                         modifier = Modifier
-                                            .size(8.dp)
+                                            .size(6.dp)
                                             .clip(CircleShape)
-                                            .background(Color(selectedKeyboardTheme.accentStyle.backgroundArgb))
-                                            .border(0.5.dp, Color.White, CircleShape)
+                                            .background(statusLedColor)
                                     )
-                                    Spacer(modifier = Modifier.width(4.dp))
+                                
                                     Text(
-                                        text = selectedKeyboardTheme.name,
+                                        text = deviceName,
                                         color = Color.White,
-                                        fontSize = 9.sp,
+                                        fontSize = 11.sp,
                                         fontWeight = FontWeight.Bold,
-                                        maxLines = 1,
-                                        overflow = TextOverflow.Ellipsis,
-                                        modifier = Modifier.widthIn(max = 80.dp),
+                                        fontFamily = FontFamily.SansSerif
                                     )
+                                
+                                    // Reconnect Button
+                                    ReconnectHostButton(btManager)
                                 }
-
-                                // 5. Mute Speaker Button (Squarish, height 28dp, radius 6dp)
-                                Box(
-                                    modifier = Modifier
-                                        .size(28.dp)
-                                        .clip(RoundedCornerShape(6.dp))
-                                        .background(Color.White.copy(alpha = 0.15f))
-                                        .clickable {
-                                            val muted = !isMuted
-                                            isMuted = muted
-                                            soundSynth.setMute(muted)
-                                            sharedPrefs.edit { putBoolean("key_sound_enabled", !muted) }
-                                        }
-                                        .testTag("mute_toggle"),
-                                    contentAlignment = Alignment.Center
+                        }
+                        val keyboardBarRight: @Composable () -> Unit = {
+                                // Right Section: lock LEDs indicators, configuration pills, and mute button
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(6.dp)
                                 ) {
-                                    Icon(
-                                        imageVector = if (isMuted) Icons.AutoMirrored.Filled.VolumeOff else Icons.AutoMirrored.Filled.VolumeUp,
-                                        contentDescription = "Mute",
-                                        tint = Color.White,
-                                        modifier = Modifier.size(14.dp)
-                                    )
+                                    // 1. Keyboard Status Lock LEDs Panel
+                                    Row(
+                                        modifier = Modifier
+                                            .height(28.dp)
+                                            .clip(RoundedCornerShape(6.dp))
+                                            .background(Color.White.copy(alpha = 0.15f))
+                                            .padding(horizontal = 8.dp),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                                    ) {
+                                        // CAPS
+                                        Row(
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.spacedBy(4.dp),
+                                            modifier = Modifier
+                                                .clip(RoundedCornerShape(4.dp))
+                                                .clickable {
+                                                    if (isConnected) {
+                                                        btManager.sendKey(0x39, true)
+                                                        btManager.sendKey(0x39, false)
+                                                        if (lockSyncMode == "device") {
+                                                            isCapsLockActive = !isCapsLockActive
+                                                        }
+                                                    } else {
+                                                        isCapsLockActive = !isCapsLockActive
+                                                    }
+                                                }
+                                                .padding(horizontal = 4.dp, vertical = 2.dp)
+                                        ) {
+                                            Box(
+                                                modifier = Modifier
+                                                    .size(5.dp)
+                                                    .clip(CircleShape)
+                                                    .background(if (isCapsLockActive) Color(0xFF39FF14) else Color.White.copy(alpha = 0.15f))
+                                            )
+                                            Text(
+                                                text = "CAPS",
+                                                color = if (isCapsLockActive) Color.White else Color.White.copy(alpha = 0.4f),
+                                                fontSize = 8.sp,
+                                                fontWeight = FontWeight.Bold,
+                                                fontFamily = FontFamily.SansSerif,
+                                                style = androidx.compose.ui.text.TextStyle(
+                                                    platformStyle = androidx.compose.ui.text.PlatformTextStyle(includeFontPadding = false)
+                                                )
+                                            )
+                                        }
+                                    
+                                        // NUM
+                                        Row(
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.spacedBy(4.dp),
+                                            modifier = Modifier
+                                                .clip(RoundedCornerShape(4.dp))
+                                                .clickable {
+                                                    if (isConnected) {
+                                                        btManager.sendKey(0x53, true)
+                                                        btManager.sendKey(0x53, false)
+                                                        if (lockSyncMode == "device") {
+                                                            isNumLockActive = !isNumLockActive
+                                                        }
+                                                    } else {
+                                                        isNumLockActive = !isNumLockActive
+                                                    }
+                                                }
+                                                .padding(horizontal = 4.dp, vertical = 2.dp)
+                                        ) {
+                                            Box(
+                                                modifier = Modifier
+                                                    .size(5.dp)
+                                                    .clip(CircleShape)
+                                                    .background(if (isNumLockActive) Color(0xFF39FF14) else Color.White.copy(alpha = 0.15f))
+                                            )
+                                            Text(
+                                                text = "NUM",
+                                                color = if (isNumLockActive) Color.White else Color.White.copy(alpha = 0.4f),
+                                                fontSize = 8.sp,
+                                                fontWeight = FontWeight.Bold,
+                                                fontFamily = FontFamily.SansSerif,
+                                                style = androidx.compose.ui.text.TextStyle(
+                                                    platformStyle = androidx.compose.ui.text.PlatformTextStyle(includeFontPadding = false)
+                                                )
+                                            )
+                                        }
+                                    
+                                        // SCR
+                                        Row(
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.spacedBy(4.dp),
+                                            modifier = Modifier
+                                                .clip(RoundedCornerShape(4.dp))
+                                                .clickable {
+                                                    if (isConnected) {
+                                                        btManager.sendKey(0x47, true)
+                                                        btManager.sendKey(0x47, false)
+                                                        if (lockSyncMode == "device") {
+                                                            isScrollLockActive = !isScrollLockActive
+                                                        }
+                                                    } else {
+                                                        isScrollLockActive = !isScrollLockActive
+                                                    }
+                                                }
+                                                .padding(horizontal = 4.dp, vertical = 2.dp)
+                                        ) {
+                                            Box(
+                                                modifier = Modifier
+                                                    .size(5.dp)
+                                                    .clip(CircleShape)
+                                                    .background(if (isScrollLockActive) Color(0xFF39FF14) else Color.White.copy(alpha = 0.15f))
+                                            )
+                                            Text(
+                                                text = "SCR",
+                                                color = if (isScrollLockActive) Color.White else Color.White.copy(alpha = 0.4f),
+                                                fontSize = 8.sp,
+                                                fontWeight = FontWeight.Bold,
+                                                fontFamily = FontFamily.SansSerif,
+                                                style = androidx.compose.ui.text.TextStyle(
+                                                    platformStyle = androidx.compose.ui.text.PlatformTextStyle(includeFontPadding = false)
+                                                )
+                                            )
+                                        }
+                                    }
+
+                                    // 2. Layout Selector Pill
+                                    Row(
+                                        modifier = Modifier
+                                            .height(28.dp)
+                                            .clip(RoundedCornerShape(6.dp))
+                                            .background(Color.White.copy(alpha = 0.15f))
+                                            .combinedClickable(
+                                                onClickLabel = "Next keyboard layout",
+                                                onLongClickLabel = "Configure keyboard layout cycle",
+                                                onClick = {
+                                                    val savedSet = sharedPrefs.getStringSet(CYCLE_KEYBOARD_GEOMETRIES_PREFERENCE, null)
+                                                    val enabledLayouts = if (savedSet == null) {
+                                                        KeyboardGeometry.entries
+                                                    } else {
+                                                        KeyboardGeometry.entries.filter { savedSet.contains(it.name) }
+                                                    }.ifEmpty { listOf(selectedGeometry) }
+                                                    val currentIndexInEnabled = enabledLayouts.indexOf(selectedGeometry)
+                                                    val nextIndex = if (currentIndexInEnabled < 0) 0 else (currentIndexInEnabled + 1) % enabledLayouts.size
+                                                    selectedGeometry = enabledLayouts[nextIndex]
+                                                    sharedPrefs.edit { putString(KEYBOARD_GEOMETRY_PREFERENCE, selectedGeometry.name) }
+                                                    soundSynth.playPress()
+                                                },
+                                                onLongClick = {
+                                                    context.startActivity(Intent(context, KeyboardLayoutsActivity::class.java))
+                                                },
+                                            )
+                                            .padding(horizontal = 8.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.Keyboard,
+                                            contentDescription = "Layout",
+                                            tint = Color.White.copy(alpha = 0.9f),
+                                            modifier = Modifier.size(10.dp)
+                                        )
+                                        Spacer(modifier = Modifier.width(4.dp))
+                                        Text(
+                                            text = selectedGeometry.displayName,
+                                            color = Color.White,
+                                            fontSize = 9.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis,
+                                            modifier = Modifier.widthIn(max = 90.dp),
+                                        )
+                                    }
+
+                                    // 3. Switch Selector Pill
+                                    Row(
+                                        modifier = Modifier
+                                            .height(28.dp)
+                                            .clip(RoundedCornerShape(6.dp))
+                                            .background(Color.White.copy(alpha = 0.15f))
+                                            .combinedClickable(
+                                                onClickLabel = "Next key sound",
+                                                onLongClickLabel = "Manage key sounds",
+                                                onClick = {
+                                                    val enabledProfiles = soundCycleSelection(
+                                                        sharedPrefs,
+                                                        dev.arnv.bluke.sound.CustomSoundPackRepository(context).listPacks().map { it.id },
+                                                    )
+                                                    soundSynth.cycleSoundProfile(enabledProfiles)
+                                                    currentSwitch = soundSynth.getCurrentSwitch()
+                                                    currentSoundProfileName = soundSynth.getSelectedSoundProfileName()
+                                                    soundSynth.playPress()
+                                                },
+                                                onLongClick = {
+                                                    context.startActivity(Intent(context, SoundPacksActivity::class.java))
+                                                },
+                                            )
+                                            .padding(horizontal = 8.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.MusicNote,
+                                            contentDescription = "Switch",
+                                            tint = Color.White.copy(alpha = 0.9f),
+                                            modifier = Modifier.size(10.dp)
+                                        )
+                                        Spacer(modifier = Modifier.width(4.dp))
+                                        Text(
+                                            text = currentSoundProfileName,
+                                            color = Color.White,
+                                            fontSize = 9.sp,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                    }
+
+                                    // 4. Keyboard Theme Selector Pill
+                                    Row(
+                                        modifier = Modifier
+                                            .height(28.dp)
+                                            .clip(RoundedCornerShape(6.dp))
+                                            .background(Color.White.copy(alpha = 0.15f))
+                                            .combinedClickable(
+                                                onClickLabel = "Next keyboard theme",
+                                                onLongClickLabel = "Customize keyboard themes",
+                                                onClick = {
+                                                    val availableThemes = keyboardThemeRepository.allThemes()
+                                                    val savedThemeIds = sharedPrefs.getStringSet(
+                                                        CYCLE_KEYBOARD_THEMES_PREFERENCE,
+                                                        null,
+                                                    )
+                                                    val enabledThemes = if (savedThemeIds == null) {
+                                                        availableThemes
+                                                    } else {
+                                                        availableThemes.filter { theme -> theme.id in savedThemeIds }
+                                                    }.ifEmpty { listOf(selectedKeyboardTheme) }
+                                                    val currentIndex = enabledThemes.indexOfFirst {
+                                                        it.id == selectedKeyboardTheme.id
+                                                    }
+                                                    val nextIndex = if (currentIndex < 0) {
+                                                        0
+                                                    } else {
+                                                        (currentIndex + 1) % enabledThemes.size
+                                                    }
+                                                    selectedKeyboardTheme = enabledThemes[nextIndex]
+                                                    keyboardThemeRepository.selectTheme(selectedKeyboardTheme.id)
+                                                    soundSynth.playPress()
+                                                },
+                                                onLongClick = {
+                                                    context.startActivity(
+                                                        Intent(context, KeyboardThemesActivity::class.java),
+                                                    )
+                                                },
+                                            )
+                                            .padding(horizontal = 8.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Box(
+                                            modifier = Modifier
+                                                .size(8.dp)
+                                                .clip(CircleShape)
+                                                .background(Color(selectedKeyboardTheme.accentStyle.backgroundArgb))
+                                                .border(0.5.dp, Color.White, CircleShape)
+                                        )
+                                        Spacer(modifier = Modifier.width(4.dp))
+                                        Text(
+                                            text = selectedKeyboardTheme.name,
+                                            color = Color.White,
+                                            fontSize = 9.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis,
+                                            modifier = Modifier.widthIn(max = 80.dp),
+                                        )
+                                    }
+
+                                    // 5. Mute Speaker Button (Squarish, height 28dp, radius 6dp)
+                                    Box(
+                                        modifier = Modifier
+                                            .size(28.dp)
+                                            .clip(RoundedCornerShape(6.dp))
+                                            .background(Color.White.copy(alpha = 0.15f))
+                                            .clickable {
+                                                val muted = !isMuted
+                                                isMuted = muted
+                                                soundSynth.setMute(muted)
+                                                sharedPrefs.edit { putBoolean("key_sound_enabled", !muted) }
+                                            }
+                                            .testTag("mute_toggle"),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Icon(
+                                            imageVector = if (isMuted) Icons.AutoMirrored.Filled.VolumeOff else Icons.AutoMirrored.Filled.VolumeUp,
+                                            contentDescription = "Mute",
+                                            tint = Color.White,
+                                            modifier = Modifier.size(14.dp)
+                                        )
+                                    }
                                 }
+                        }
+                        if (isLandscape) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(38.dp)
+                                    .background(Color.Black.copy(alpha = 0.45f))
+                                    .padding(horizontal = 8.dp, vertical = 2.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                keyboardBarLeft()
+                                keyboardBarRight()
+                            }
+                        } else {
+                            RemoteTopBarFrame {
+                                PortraitBarRow { keyboardBarLeft() }
+                                PortraitBarRow { keyboardBarRight() }
                             }
                         }
+
 
                         // 2. Main Mechanical Keyboard Chassis (centered with custom margins)
                         Box(
@@ -1096,21 +1086,30 @@ fun HomeScreen(
                                 .weight(1f)
                                 .fillMaxWidth()
                                 .padding(horizontal = 6.dp, vertical = 2.dp),
-                            contentAlignment = Alignment.Center
+                            contentAlignment = if (isLandscape) Alignment.Center else Alignment.BottomCenter
                         ) {
-                            KeyboardView(
-                                geometry = selectedGeometry,
-                                theme = selectedKeyboardTheme,
-                                characterLayout = characterLayout,
-                                activePressedKeys = activePressedKeys,
-                                isConnected = isConnected,
-                                isCapsLockActive = isCapsLockActive,
-                                isNumLockActive = isNumLockActive,
-                                isScrollLockActive = isScrollLockActive,
-                                isFnActive = isFnActive,
-                                keySensitivity = keySensitivity,
-                                onKeyPressChange = { code, press -> handleLocalKeyPress(code, press) }
-                            )
+                            // Portrait: keyboard fills the width and sits at the bottom, thumb-reachable.
+                            Box(
+                                modifier = if (isLandscape) {
+                                    Modifier.fillMaxSize()
+                                } else {
+                                    Modifier.fillMaxWidth().aspectRatio(2.2f)
+                                }
+                            ) {
+                                KeyboardView(
+                                    geometry = selectedGeometry,
+                                    theme = selectedKeyboardTheme,
+                                    characterLayout = characterLayout,
+                                    activePressedKeys = activePressedKeys,
+                                    isConnected = isConnected,
+                                    isCapsLockActive = isCapsLockActive,
+                                    isNumLockActive = isNumLockActive,
+                                    isScrollLockActive = isScrollLockActive,
+                                    isFnActive = isFnActive,
+                                    keySensitivity = keySensitivity,
+                                    onKeyPressChange = { code, press -> handleLocalKeyPress(code, press) }
+                                )
+                            }
                             KeyboardLayoutSwitcherOverlay(
                                 visible = showLayoutSwitcher,
                                 selectedLayout = pendingCharacterLayout ?: characterLayout,

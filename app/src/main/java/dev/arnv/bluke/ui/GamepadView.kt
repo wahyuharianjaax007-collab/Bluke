@@ -551,212 +551,228 @@ fun GamepadView(
         transmitGamepadState(true)
     }
 
+    val isLandscape = rememberIsLandscape()
+    RemoteSystemBars(isLandscape = isLandscape, baseColor = Color(0xFF28282A))
+
     Box(
         modifier = Modifier
             .fillMaxSize()
             .background(Color(0xFF28282A))
-            .navigationBarsPadding()
+            .remoteRootInsets()
             .testTag("gamepad_view_root")
     ) {
         Column(modifier = Modifier.fillMaxSize()) {
 
-            // ── Top Settings Bar ──
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(38.dp)
-                    .background(Color.Black.copy(alpha = 0.45f))
-                    .padding(horizontal = 8.dp, vertical = 2.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    // Close
+            // Top bar: one line in landscape, two lines (under a themed status bar) in portrait
+            val gamepadBarLeft: @Composable () -> Unit = {
                     Row(
-                        modifier = Modifier
-                            .height(28.dp)
-                            .clip(RoundedCornerShape(6.dp))
-                            .background(Color.White.copy(alpha = 0.15f))
-                            .clickable { onClose() }
-                            .padding(horizontal = 8.dp)
-                            .testTag("exit_gamepad_btn"),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Icon(Icons.Default.Close, "Exit", tint = Color.White, modifier = Modifier.size(10.dp))
-                        Spacer(Modifier.width(4.dp))
-                        Text("Close", color = Color.White, fontSize = 9.sp, fontWeight = FontWeight.Bold)
-                    }
-
-                    // Mode cycle
-                    Row(
-                        modifier = Modifier
-                            .height(28.dp)
-                            .clip(RoundedCornerShape(6.dp))
-                            .background(Color.White.copy(alpha = 0.15f))
-                            .combinedClickable(
-                                onClickLabel = "Next input mode",
-                                onLongClickLabel = "Configure input mode cycle",
-                                onClick = {
-                                    val enabledModes = sharedPrefs.enabledInputModes().map(InputMode::id)
-                                    val idx = enabledModes.indexOf(launchMode)
-                                    onModeChange(enabledModes[(idx + 1) % enabledModes.size])
-                                    triggerVibration(25)
-                                },
-                                onLongClick = {
-                                    context.startActivity(Intent(context, QuickCycleActivity::class.java))
-                                },
-                            )
-                            .padding(horizontal = 8.dp)
-                            .testTag("gamepad_mode_cycle_btn"),
                         verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        Icon(Icons.Default.SportsEsports, "Switch Mode", tint = Color.White, modifier = Modifier.size(11.dp))
-                        Text("Gamepad Mode", color = Color.White, fontSize = 9.sp, fontWeight = FontWeight.Bold)
-                    }
-
-                    // Connection status
-                    Box(Modifier.size(6.dp).clip(CircleShape).background(if (isConnected) Color(0xFF39FF14) else Color(0xFFFF9800)))
-                    Text(deviceName, color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold, fontFamily = FontFamily.SansSerif)
-                    ReconnectHostButton(btManager, iconOnly = true)
-                }
-
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    // Output profile selector. All profiles share one descriptor, so
-                    // Native, Android and Web switch live without HID re-registration.
-                    Row(
-                        modifier = Modifier
-                            .height(28.dp)
-                            .clip(RoundedCornerShape(6.dp))
-                            .background(Color.White.copy(alpha = 0.15f))
-                            .combinedClickable(
-                                enabled = !modeSwitchBusy,
-                                onClickLabel = "Switch controller compatibility",
-                                onLongClickLabel = "Configure controller compatibility",
-                                onClick = {
-                                    val newMode = dpadOutputMode.next()
-                                    if (btManager.changeGamepadMode(newMode)) triggerVibration(15)
-                                },
-                                onLongClick = {
-                                    context.startActivity(Intent(context, ControllerSettingsActivity::class.java))
-                                },
-                            )
-                            .padding(horizontal = 8.dp)
-                            .testTag("dpad_output_mode_toggle"),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(4.dp)
-                    ) {
-                        Icon(
-                            imageVector = when (dpadOutputMode) {
-                                GamepadDpadOutputMode.WEB_BUTTONS -> Icons.Default.Language
-                                GamepadDpadOutputMode.ANDROID -> Icons.Default.Android
-                                GamepadDpadOutputMode.NATIVE_HAT -> Icons.Default.Gamepad
-                            },
-                            contentDescription = null,
-                            tint = Color.White,
-                            modifier = Modifier.size(11.dp)
-                        )
-                        Text(
-                            text = "Mode: ${dpadOutputMode.label}",
-                            color = Color.White,
-                            fontSize = 9.sp,
-                            fontWeight = FontWeight.Bold
-                        )
-                    }
-
-                    // Reset Defaults (only shown when edit mode is active and there are layout changes)
-                    if (isEditMode && isModified) {
+                        // Close
                         Row(
                             modifier = Modifier
                                 .height(28.dp)
                                 .clip(RoundedCornerShape(6.dp))
-                                .background(Color(0xFFEF5350).copy(alpha = 0.35f))
-                                .clickable { resetDefaults() }
+                                .background(Color.White.copy(alpha = 0.15f))
+                                .clickable { onClose() }
                                 .padding(horizontal = 8.dp)
-                                .testTag("reset_layout_defaults_btn"),
+                                .testTag("exit_gamepad_btn"),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(Icons.Default.Close, "Exit", tint = Color.White, modifier = Modifier.size(10.dp))
+                            Spacer(Modifier.width(4.dp))
+                            Text("Close", color = Color.White, fontSize = 9.sp, fontWeight = FontWeight.Bold)
+                        }
+
+                        // Mode cycle
+                        Row(
+                            modifier = Modifier
+                                .height(28.dp)
+                                .clip(RoundedCornerShape(6.dp))
+                                .background(Color.White.copy(alpha = 0.15f))
+                                .combinedClickable(
+                                    onClickLabel = "Next input mode",
+                                    onLongClickLabel = "Configure input mode cycle",
+                                    onClick = {
+                                        val enabledModes = sharedPrefs.enabledInputModes().map(InputMode::id)
+                                        val idx = enabledModes.indexOf(launchMode)
+                                        onModeChange(enabledModes[(idx + 1) % enabledModes.size])
+                                        triggerVibration(25)
+                                    },
+                                    onLongClick = {
+                                        context.startActivity(Intent(context, QuickCycleActivity::class.java))
+                                    },
+                                )
+                                .padding(horizontal = 8.dp)
+                                .testTag("gamepad_mode_cycle_btn"),
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.spacedBy(4.dp)
                         ) {
-                            Icon(Icons.Default.Refresh, "Reset Defaults", tint = Color.White, modifier = Modifier.size(11.dp))
-                            Text("Reset Defaults", color = Color.White, fontSize = 9.sp, fontWeight = FontWeight.Bold)
+                            Icon(Icons.Default.SportsEsports, "Switch Mode", tint = Color.White, modifier = Modifier.size(11.dp))
+                            Text("Gamepad Mode", color = Color.White, fontSize = 9.sp, fontWeight = FontWeight.Bold)
                         }
+
+                        // Connection status
+                        Box(Modifier.size(6.dp).clip(CircleShape).background(if (isConnected) Color(0xFF39FF14) else Color(0xFFFF9800)))
+                        Text(deviceName, color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold, fontFamily = FontFamily.SansSerif)
+                        ReconnectHostButton(btManager, iconOnly = true)
                     }
 
-                    // Edit Layout toggle
+            }
+            val gamepadBarRight: @Composable () -> Unit = {
                     Row(
-                        modifier = Modifier
-                            .height(28.dp)
-                            .clip(RoundedCornerShape(6.dp))
-                            .background(Color.White.copy(alpha = 0.15f))
-                            .clickable {
-                                isEditMode = !isEditMode
-                                triggerVibration(30)
-                            }
-                            .padding(horizontal = 8.dp)
-                            .testTag("edit_layout_toggle_btn"),
                         verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        Icon(
-                            imageVector = if (isEditMode) Icons.Default.Check else Icons.Default.Edit,
-                            contentDescription = "Edit Layout",
-                            tint = Color.White,
-                            modifier = Modifier.size(12.dp)
-                        )
-                        Text(
-                            text = if (isEditMode) "Done" else "Edit Layout",
-                            color = Color.White,
-                            fontSize = 9.sp,
-                            fontWeight = FontWeight.Bold
-                        )
-                    }
+                        // Output profile selector. All profiles share one descriptor, so
+                        // Native, Android and Web switch live without HID re-registration.
+                        Row(
+                            modifier = Modifier
+                                .height(28.dp)
+                                .clip(RoundedCornerShape(6.dp))
+                                .background(Color.White.copy(alpha = 0.15f))
+                                .combinedClickable(
+                                    enabled = !modeSwitchBusy,
+                                    onClickLabel = "Switch controller compatibility",
+                                    onLongClickLabel = "Configure controller compatibility",
+                                    onClick = {
+                                        val newMode = dpadOutputMode.next()
+                                        if (btManager.changeGamepadMode(newMode)) triggerVibration(15)
+                                    },
+                                    onLongClick = {
+                                        context.startActivity(Intent(context, ControllerSettingsActivity::class.java))
+                                    },
+                                )
+                                .padding(horizontal = 8.dp)
+                                .testTag("dpad_output_mode_toggle"),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                            Icon(
+                                imageVector = when (dpadOutputMode) {
+                                    GamepadDpadOutputMode.WEB_BUTTONS -> Icons.Default.Language
+                                    GamepadDpadOutputMode.ANDROID -> Icons.Default.Android
+                                    GamepadDpadOutputMode.NATIVE_HAT -> Icons.Default.Gamepad
+                                },
+                                contentDescription = null,
+                                tint = Color.White,
+                                modifier = Modifier.size(11.dp)
+                            )
+                            Text(
+                                text = "Mode: ${dpadOutputMode.label}",
+                                color = Color.White,
+                                fontSize = 9.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
 
-                    // Console layout selector
-                    Row(
-                        modifier = Modifier
-                            .height(28.dp)
-                            .clip(RoundedCornerShape(6.dp))
-                            .background(Color.White.copy(alpha = 0.15f))
-                            .clickable {
-                                selectedIndex = (selectedIndex + 1) % CONSOLES.size
-                                triggerVibration(15)
+                        // Reset Defaults (only shown when edit mode is active and there are layout changes)
+                        if (isEditMode && isModified) {
+                            Row(
+                                modifier = Modifier
+                                    .height(28.dp)
+                                    .clip(RoundedCornerShape(6.dp))
+                                    .background(Color(0xFFEF5350).copy(alpha = 0.35f))
+                                    .clickable { resetDefaults() }
+                                    .padding(horizontal = 8.dp)
+                                    .testTag("reset_layout_defaults_btn"),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(4.dp)
+                            ) {
+                                Icon(Icons.Default.Refresh, "Reset Defaults", tint = Color.White, modifier = Modifier.size(11.dp))
+                                Text("Reset Defaults", color = Color.White, fontSize = 9.sp, fontWeight = FontWeight.Bold)
                             }
-                            .padding(horizontal = 8.dp)
-                            .testTag("console_selector_pill"),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Icon(Icons.Default.SportsEsports, "Consoles", tint = Color.White, modifier = Modifier.size(11.dp))
-                        Spacer(Modifier.width(4.dp))
-                        Text(config.name, color = Color.White, fontSize = 9.sp, fontWeight = FontWeight.Bold)
-                    }
+                        }
 
-                    // Vibration toggle
-                    Box(
-                        modifier = Modifier
-                            .size(28.dp)
-                            .clip(RoundedCornerShape(6.dp))
-                            .background(Color.White.copy(alpha = 0.15f))
-                            .clickable {
-                                val active = !isVibrationEnabled
-                                isVibrationEnabled = active
-                                sharedPrefs.edit { putBoolean("gamepad_vibration_enabled", active) }
-                                if (active) triggerVibration(50)
+                        // Edit Layout toggle
+                        Row(
+                            modifier = Modifier
+                                .height(28.dp)
+                                .clip(RoundedCornerShape(6.dp))
+                                .background(Color.White.copy(alpha = 0.15f))
+                                .clickable {
+                                    isEditMode = !isEditMode
+                                    triggerVibration(30)
+                                }
+                                .padding(horizontal = 8.dp)
+                                .testTag("edit_layout_toggle_btn"),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                            Icon(
+                                imageVector = if (isEditMode) Icons.Default.Check else Icons.Default.Edit,
+                                contentDescription = "Edit Layout",
+                                tint = Color.White,
+                                modifier = Modifier.size(12.dp)
+                            )
+                            Text(
+                                text = if (isEditMode) "Done" else "Edit Layout",
+                                color = Color.White,
+                                fontSize = 9.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+
+                        // Console layout selector
+                        Row(
+                            modifier = Modifier
+                                .height(28.dp)
+                                .clip(RoundedCornerShape(6.dp))
+                                .background(Color.White.copy(alpha = 0.15f))
+                                .clickable {
+                                    selectedIndex = (selectedIndex + 1) % CONSOLES.size
+                                    triggerVibration(15)
+                                }
+                                .padding(horizontal = 8.dp)
+                                .testTag("console_selector_pill"),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(Icons.Default.SportsEsports, "Consoles", tint = Color.White, modifier = Modifier.size(11.dp))
+                            Spacer(Modifier.width(4.dp))
+                            Text(config.name, color = Color.White, fontSize = 9.sp, fontWeight = FontWeight.Bold)
+                        }
+
+                        // Vibration toggle
+                        Box(
+                            modifier = Modifier
+                                .size(28.dp)
+                                .clip(RoundedCornerShape(6.dp))
+                                .background(Color.White.copy(alpha = 0.15f))
+                                .clickable {
+                                    val active = !isVibrationEnabled
+                                    isVibrationEnabled = active
+                                    sharedPrefs.edit { putBoolean("gamepad_vibration_enabled", active) }
+                                    if (active) triggerVibration(50)
+                                }
+                                .testTag("vibration_gamepad_toggle"),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            if (isVibrationEnabled) {
+                                Icon(Icons.Default.Vibration, "Haptics", tint = Color.White, modifier = Modifier.size(12.dp))
+                            } else {
+                                Icon(painterResource(R.drawable.ic_vibration_off), "Haptics", tint = Color.White, modifier = Modifier.size(12.dp))
                             }
-                            .testTag("vibration_gamepad_toggle"),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        if (isVibrationEnabled) {
-                            Icon(Icons.Default.Vibration, "Haptics", tint = Color.White, modifier = Modifier.size(12.dp))
-                        } else {
-                            Icon(painterResource(R.drawable.ic_vibration_off), "Haptics", tint = Color.White, modifier = Modifier.size(12.dp))
                         }
                     }
+            }
+            if (isLandscape) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(38.dp)
+                        .background(Color.Black.copy(alpha = 0.45f))
+                        .padding(horizontal = 8.dp, vertical = 2.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                gamepadBarLeft()
+                gamepadBarRight()
+            }
+            } else {
+                RemoteTopBarFrame {
+                    PortraitBarRow { gamepadBarLeft() }
+                    PortraitBarRow { gamepadBarRight() }
                 }
             }
 
@@ -767,445 +783,449 @@ fun GamepadView(
                     .fillMaxWidth()
             ) {
 
-                Row(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(horizontal = 8.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                if (config.leftStickAboveDpad) {
-                    // ── XBOX-STYLE OFFSET LAYOUT ──
-                    // Left column: Left Stick (top), Dpad (bottom)
-                    Column(
-                        modifier = Modifier.weight(0.3f).fillMaxHeight(),
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.Top
-                    ) {
-                        Spacer(Modifier.height(38.dp))
-                        EditableComponentWrapper(
-                            isEditMode = isEditMode,
-                            offsetX = leftStickOffsetX,
-                            offsetY = leftStickOffsetY,
-                            scale = leftStickScale,
-                            onOffsetChange = { x, y -> leftStickOffsetX = x; leftStickOffsetY = y; saveLayoutPref("${config.id}_left_stick_x", x); saveLayoutPref("${config.id}_left_stick_y", y) },
-                            onScaleChange = { s -> leftStickScale = s; saveLayoutPref("${config.id}_left_stick_scale", s) },
-                            onTransformEnd = commitLayoutPrefs
-                        ) {
-                            GamepadAnalogStick(
-                                label = "L",
-                                isClicked = { (buttonMask and (1 shl 10)) != 0 },
-                                isHeld = { (buttonMask and (1 shl 10)) != 0 },
-                                onMove = { x, y -> leftStickX = x; leftStickY = y; transmitGamepadState(false) },
-                                onStickClick = { scope.launch { pressButton(10); delay(100L.milliseconds); releaseButton(10) } },
-                                onToggleHold = { hold -> if (hold) pressButton(10) else releaseButton(10) }
-                            )
-                        }
-                        Spacer(Modifier.height(16.dp))
-                        EditableComponentWrapper(
-                            isEditMode = isEditMode,
-                            offsetX = dpadOffsetX,
-                            offsetY = dpadOffsetY,
-                            scale = dpadScale,
-                            onOffsetChange = { x, y -> dpadOffsetX = x; dpadOffsetY = y; saveLayoutPref("${config.id}_dpad_x", x); saveLayoutPref("${config.id}_dpad_y", y) },
-                            onScaleChange = { s -> dpadScale = s; saveLayoutPref("${config.id}_dpad_scale", s) },
-                            onTransformEnd = commitLayoutPrefs
-                        ) {
-                            GamepadDpad(
-                                isXboxStyle = true,
-                                onDpadChange = { mask ->
-                                    dpadMask = mask
-                                    transmitGamepadState(true)
-                                    if (mask != 0) triggerVibration(15)
-                                }
-                            )
-                        }
-                    }
-
-                    // Center column: Logo, Center Buttons, Triggers/Bumpers
-                    Column(
-                        modifier = Modifier.weight(0.4f).fillMaxHeight(),
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.Top
-                    ) {
-                        Spacer(Modifier.height(14.dp))
-                        // Triggers/Bumpers vertically stacked at the top
-                        Row(
-                            modifier = Modifier.fillMaxWidth(0.95f),
-                            horizontalArrangement = Arrangement.SpaceBetween
-                        ) {
-                            // Left stack: LB above LT
-                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                EditableComponentWrapper(
-                                    isEditMode = isEditMode,
-                                    offsetX = leftTriggerOffsetX,
-                                    offsetY = leftTriggerOffsetY,
-                                    scale = leftTriggerScale,
-                                    onOffsetChange = { x, y -> leftTriggerOffsetX = x; leftTriggerOffsetY = y; saveLayoutPref("${config.id}_left_trigger_x", x); saveLayoutPref("${config.id}_left_trigger_y", y) },
-                                    onScaleChange = { s -> leftTriggerScale = s; saveLayoutPref("${config.id}_left_trigger_scale", s) },
-                                    onTransformEnd = commitLayoutPrefs
-                                ) {
-                                    GamepadTriggerButton(config.leftTrigger, true, pressButton, releaseButton)
-                                }
-                                Spacer(Modifier.height(4.dp))
-                                EditableComponentWrapper(
-                                    isEditMode = isEditMode,
-                                    offsetX = leftBumperOffsetX,
-                                    offsetY = leftBumperOffsetY,
-                                    scale = leftBumperScale,
-                                    onOffsetChange = { x, y -> leftBumperOffsetX = x; leftBumperOffsetY = y; saveLayoutPref("${config.id}_left_bumper_x", x); saveLayoutPref("${config.id}_left_bumper_y", y) },
-                                    onScaleChange = { s -> leftBumperScale = s; saveLayoutPref("${config.id}_left_bumper_scale", s) },
-                                    onTransformEnd = commitLayoutPrefs
-                                ) {
-                                    GamepadBumperButton(config.leftBumper, true, pressButton, releaseButton)
-                                }
-                            }
-                            // Right stack: RB above RT
-                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                EditableComponentWrapper(
-                                    isEditMode = isEditMode,
-                                    offsetX = rightTriggerOffsetX,
-                                    offsetY = rightTriggerOffsetY,
-                                    scale = rightTriggerScale,
-                                    onOffsetChange = { x, y -> rightTriggerOffsetX = x; rightTriggerOffsetY = y; saveLayoutPref("${config.id}_right_trigger_x", x); saveLayoutPref("${config.id}_right_trigger_y", y) },
-                                    onScaleChange = { s -> rightTriggerScale = s; saveLayoutPref("${config.id}_right_trigger_scale", s) },
-                                    onTransformEnd = commitLayoutPrefs
-                                ) {
-                                    GamepadTriggerButton(config.rightTrigger, false, pressButton, releaseButton)
-                                }
-                                Spacer(Modifier.height(4.dp))
-                                EditableComponentWrapper(
-                                    isEditMode = isEditMode,
-                                    offsetX = rightBumperOffsetX,
-                                    offsetY = rightBumperOffsetY,
-                                    scale = rightBumperScale,
-                                    onOffsetChange = { x, y -> rightBumperOffsetX = x; rightBumperOffsetY = y; saveLayoutPref("${config.id}_right_bumper_x", x); saveLayoutPref("${config.id}_right_bumper_y", y) },
-                                    onScaleChange = { s -> rightBumperScale = s; saveLayoutPref("${config.id}_right_bumper_scale", s) },
-                                    onTransformEnd = commitLayoutPrefs
-                                ) {
-                                    GamepadBumperButton(config.rightBumper, false, pressButton, releaseButton)
-                                }
-                            }
-                        }
-
-                        Spacer(Modifier.height(12.dp))
-
-                        // Large Xbox Guide button
-                        EditableComponentWrapper(
-                            isEditMode = isEditMode,
-                            offsetX = guideOffsetX,
-                            offsetY = guideOffsetY,
-                            scale = guideScale,
-                            onOffsetChange = { x, y -> guideOffsetX = x; guideOffsetY = y; saveLayoutPref("${config.id}_guide_x", x); saveLayoutPref("${config.id}_guide_y", y) },
-                            onScaleChange = { s -> guideScale = s; saveLayoutPref("${config.id}_guide_scale", s) },
-                            onTransformEnd = commitLayoutPrefs
-                        ) {
-                            XboxLogoGuideButton(config.guideButton, pressButton, releaseButton)
-                        }
-
-                        Spacer(Modifier.height(12.dp))
-
-                        // Center buttons (Select, Share, Start) flanking the area below Guide
-                        Row(
-                            modifier = Modifier.fillMaxWidth(0.75f),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            EditableComponentWrapper(
-                                isEditMode = isEditMode,
-                                offsetX = selectOffsetX,
-                                offsetY = selectOffsetY,
-                                scale = selectScale,
-                                onOffsetChange = { x, y -> selectOffsetX = x; selectOffsetY = y; saveLayoutPref("${config.id}_select_x", x); saveLayoutPref("${config.id}_select_y", y) },
-                                onScaleChange = { s -> selectScale = s; saveLayoutPref("${config.id}_select_scale", s) },
-                                onTransformEnd = commitLayoutPrefs
-                            ) {
-                                GamepadCenterButton(config.selectButton, pressButton, releaseButton)
-                            }
-                            EditableComponentWrapper(
-                                isEditMode = isEditMode,
-                                offsetX = shareOffsetX,
-                                offsetY = shareOffsetY,
-                                scale = shareScale,
-                                onOffsetChange = { x, y -> shareOffsetX = x; shareOffsetY = y; saveLayoutPref("${config.id}_share_x", x); saveLayoutPref("${config.id}_share_y", y) },
-                                onScaleChange = { s -> shareScale = s; saveLayoutPref("${config.id}_share_scale", s) },
-                                onTransformEnd = commitLayoutPrefs
-                            ) {
-                                GamepadCenterButton(config.shareButton, pressButton, releaseButton)
-                            }
-                            EditableComponentWrapper(
-                                isEditMode = isEditMode,
-                                offsetX = startOffsetX,
-                                offsetY = startOffsetY,
-                                scale = startScale,
-                                onOffsetChange = { x, y -> startOffsetX = x; startOffsetY = y; saveLayoutPref("${config.id}_start_x", x); saveLayoutPref("${config.id}_start_y", y) },
-                                onScaleChange = { s -> startScale = s; saveLayoutPref("${config.id}_start_scale", s) },
-                                onTransformEnd = commitLayoutPrefs
-                            ) {
-                                GamepadCenterButton(config.startButton, pressButton, releaseButton)
-                            }
-                        }
-                        Spacer(Modifier.weight(1f))
-                    }
-
-                    // Right column: Face Buttons (top), Right Stick (bottom)
-                    Column(
-                        modifier = Modifier.weight(0.3f).fillMaxHeight(),
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.Top
-                    ) {
-                        Spacer(Modifier.height(16.dp))
-                        EditableComponentWrapper(
-                            isEditMode = isEditMode,
-                            offsetX = faceButtonsOffsetX,
-                            offsetY = faceButtonsOffsetY,
-                            scale = faceButtonsScale,
-                            onOffsetChange = { x, y -> faceButtonsOffsetX = x; faceButtonsOffsetY = y; saveLayoutPref("${config.id}_face_buttons_x", x); saveLayoutPref("${config.id}_face_buttons_y", y) },
-                            onScaleChange = { s -> faceButtonsScale = s; saveLayoutPref("${config.id}_face_buttons_scale", s) },
-                            onTransformEnd = commitLayoutPrefs
-                        ) {
-                            FaceButtonsDiamond(
-                                config = config,
-                                isXboxStyle = true,
-                                onPress = pressButton,
-                                onRelease = releaseButton
-                            )
-                        }
-                        Spacer(Modifier.height(6.dp))
-                        EditableComponentWrapper(
-                            isEditMode = isEditMode,
-                            offsetX = rightStickOffsetX,
-                            offsetY = rightStickOffsetY,
-                            scale = rightStickScale,
-                            onOffsetChange = { x, y -> rightStickOffsetX = x; rightStickOffsetY = y; saveLayoutPref("${config.id}_right_stick_x", x); saveLayoutPref("${config.id}_right_stick_y", y) },
-                            onScaleChange = { s -> rightStickScale = s; saveLayoutPref("${config.id}_right_stick_scale", s) },
-                            onTransformEnd = commitLayoutPrefs
-                        ) {
-                            GamepadAnalogStick(
-                                label = "R",
-                                isClicked = { (buttonMask and (1 shl 11)) != 0 },
-                                isHeld = { (buttonMask and (1 shl 11)) != 0 },
-                                onMove = { x, y -> rightStickX = x; rightStickY = y; transmitGamepadState(false) },
-                                onStickClick = { scope.launch { pressButton(11); delay(100L.milliseconds); releaseButton(11) } },
-                                onToggleHold = { hold -> if (hold) pressButton(11) else releaseButton(11) }
-                            )
-                        }
-                        Spacer(Modifier.height(12.dp))
-                    }
+                if (!isLandscape) {
+                    PortraitGamepadHint(modifier = Modifier.fillMaxSize())
                 } else {
-                    // ── PLAYSTATION-STYLE SYMMETRICAL LAYOUT ──
-                    // Left Column: split Dpad (top), Left Stick (bottom)
-                    Column(
-                        modifier = Modifier.weight(0.3f).fillMaxHeight(),
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.Top
+                    Row(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(horizontal = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Spacer(Modifier.height(26.dp))
-                        EditableComponentWrapper(
-                            isEditMode = isEditMode,
-                            offsetX = dpadOffsetX,
-                            offsetY = dpadOffsetY,
-                            scale = dpadScale,
-                            onOffsetChange = { x, y -> dpadOffsetX = x; dpadOffsetY = y; saveLayoutPref("${config.id}_dpad_x", x); saveLayoutPref("${config.id}_dpad_y", y) },
-                            onScaleChange = { s -> dpadScale = s; saveLayoutPref("${config.id}_dpad_scale", s) },
-                            onTransformEnd = commitLayoutPrefs
+                    if (config.leftStickAboveDpad) {
+                        // ── XBOX-STYLE OFFSET LAYOUT ──
+                        // Left column: Left Stick (top), Dpad (bottom)
+                        Column(
+                            modifier = Modifier.weight(0.3f).fillMaxHeight(),
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.Top
                         ) {
-                            GamepadDpad(
-                                isXboxStyle = false,
-                                onDpadChange = { mask ->
-                                    dpadMask = mask
-                                    transmitGamepadState(true)
-                                    if (mask != 0) triggerVibration(15)
-                                }
-                            )
+                            Spacer(Modifier.height(38.dp))
+                            EditableComponentWrapper(
+                                isEditMode = isEditMode,
+                                offsetX = leftStickOffsetX,
+                                offsetY = leftStickOffsetY,
+                                scale = leftStickScale,
+                                onOffsetChange = { x, y -> leftStickOffsetX = x; leftStickOffsetY = y; saveLayoutPref("${config.id}_left_stick_x", x); saveLayoutPref("${config.id}_left_stick_y", y) },
+                                onScaleChange = { s -> leftStickScale = s; saveLayoutPref("${config.id}_left_stick_scale", s) },
+                                onTransformEnd = commitLayoutPrefs
+                            ) {
+                                GamepadAnalogStick(
+                                    label = "L",
+                                    isClicked = { (buttonMask and (1 shl 10)) != 0 },
+                                    isHeld = { (buttonMask and (1 shl 10)) != 0 },
+                                    onMove = { x, y -> leftStickX = x; leftStickY = y; transmitGamepadState(false) },
+                                    onStickClick = { scope.launch { pressButton(10); delay(100L.milliseconds); releaseButton(10) } },
+                                    onToggleHold = { hold -> if (hold) pressButton(10) else releaseButton(10) }
+                                )
+                            }
+                            Spacer(Modifier.height(16.dp))
+                            EditableComponentWrapper(
+                                isEditMode = isEditMode,
+                                offsetX = dpadOffsetX,
+                                offsetY = dpadOffsetY,
+                                scale = dpadScale,
+                                onOffsetChange = { x, y -> dpadOffsetX = x; dpadOffsetY = y; saveLayoutPref("${config.id}_dpad_x", x); saveLayoutPref("${config.id}_dpad_y", y) },
+                                onScaleChange = { s -> dpadScale = s; saveLayoutPref("${config.id}_dpad_scale", s) },
+                                onTransformEnd = commitLayoutPrefs
+                            ) {
+                                GamepadDpad(
+                                    isXboxStyle = true,
+                                    onDpadChange = { mask ->
+                                        dpadMask = mask
+                                        transmitGamepadState(true)
+                                        if (mask != 0) triggerVibration(15)
+                                    }
+                                )
+                            }
                         }
-                        Spacer(Modifier.height(16.dp))
-                        EditableComponentWrapper(
-                            isEditMode = isEditMode,
-                            offsetX = leftStickOffsetX,
-                            offsetY = leftStickOffsetY,
-                            scale = leftStickScale,
-                            onOffsetChange = { x, y -> leftStickOffsetX = x; leftStickOffsetY = y; saveLayoutPref("${config.id}_left_stick_x", x); saveLayoutPref("${config.id}_left_stick_y", y) },
-                            onScaleChange = { s -> leftStickScale = s; saveLayoutPref("${config.id}_left_stick_scale", s) },
-                            onTransformEnd = commitLayoutPrefs
-                        ) {
-                            GamepadAnalogStick(
-                                label = "L",
-                                isClicked = { (buttonMask and (1 shl 10)) != 0 },
-                                isHeld = { (buttonMask and (1 shl 10)) != 0 },
-                                onMove = { x, y -> leftStickX = x; leftStickY = y; transmitGamepadState(false) },
-                                onStickClick = { scope.launch { pressButton(10); delay(100L.milliseconds); releaseButton(10) } },
-                                onToggleHold = { hold -> if (hold) pressButton(10) else releaseButton(10) }
-                            )
-                        }
-                    }
 
-                    // Center Column: PS Button + L1/L2 R1/R2, Right Stick/Left Stick spacing
-                    Column(
-                        modifier = Modifier.weight(0.4f).fillMaxHeight(),
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.Top
-                    ) {
-                        Spacer(Modifier.height(16.dp))
-                        // Bumper/Trigger stacks
-                        Row(
-                            modifier = Modifier.fillMaxWidth().padding(horizontal = 6.dp),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.Top
+                        // Center column: Logo, Center Buttons, Triggers/Bumpers
+                        Column(
+                            modifier = Modifier.weight(0.4f).fillMaxHeight(),
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.Top
                         ) {
-                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                EditableComponentWrapper(
-                                    isEditMode = isEditMode,
-                                    offsetX = leftTriggerOffsetX,
-                                    offsetY = leftTriggerOffsetY,
-                                    scale = leftTriggerScale,
-                                    onOffsetChange = { x, y -> leftTriggerOffsetX = x; leftTriggerOffsetY = y; saveLayoutPref("${config.id}_left_trigger_x", x); saveLayoutPref("${config.id}_left_trigger_y", y) },
-                                    onScaleChange = { s -> leftTriggerScale = s; saveLayoutPref("${config.id}_left_trigger_scale", s) },
-                                    onTransformEnd = commitLayoutPrefs
-                                ) {
-                                    GamepadTriggerButton(config.leftTrigger, true, pressButton, releaseButton)
+                            Spacer(Modifier.height(14.dp))
+                            // Triggers/Bumpers vertically stacked at the top
+                            Row(
+                                modifier = Modifier.fillMaxWidth(0.95f),
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                // Left stack: LB above LT
+                                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                    EditableComponentWrapper(
+                                        isEditMode = isEditMode,
+                                        offsetX = leftTriggerOffsetX,
+                                        offsetY = leftTriggerOffsetY,
+                                        scale = leftTriggerScale,
+                                        onOffsetChange = { x, y -> leftTriggerOffsetX = x; leftTriggerOffsetY = y; saveLayoutPref("${config.id}_left_trigger_x", x); saveLayoutPref("${config.id}_left_trigger_y", y) },
+                                        onScaleChange = { s -> leftTriggerScale = s; saveLayoutPref("${config.id}_left_trigger_scale", s) },
+                                        onTransformEnd = commitLayoutPrefs
+                                    ) {
+                                        GamepadTriggerButton(config.leftTrigger, true, pressButton, releaseButton)
+                                    }
+                                    Spacer(Modifier.height(4.dp))
+                                    EditableComponentWrapper(
+                                        isEditMode = isEditMode,
+                                        offsetX = leftBumperOffsetX,
+                                        offsetY = leftBumperOffsetY,
+                                        scale = leftBumperScale,
+                                        onOffsetChange = { x, y -> leftBumperOffsetX = x; leftBumperOffsetY = y; saveLayoutPref("${config.id}_left_bumper_x", x); saveLayoutPref("${config.id}_left_bumper_y", y) },
+                                        onScaleChange = { s -> leftBumperScale = s; saveLayoutPref("${config.id}_left_bumper_scale", s) },
+                                        onTransformEnd = commitLayoutPrefs
+                                    ) {
+                                        GamepadBumperButton(config.leftBumper, true, pressButton, releaseButton)
+                                    }
                                 }
-                                Spacer(Modifier.height(4.dp))
-                                EditableComponentWrapper(
-                                    isEditMode = isEditMode,
-                                    offsetX = leftBumperOffsetX,
-                                    offsetY = leftBumperOffsetY,
-                                    scale = leftBumperScale,
-                                    onOffsetChange = { x, y -> leftBumperOffsetX = x; leftBumperOffsetY = y; saveLayoutPref("${config.id}_left_bumper_x", x); saveLayoutPref("${config.id}_left_bumper_y", y) },
-                                    onScaleChange = { s -> leftBumperScale = s; saveLayoutPref("${config.id}_left_bumper_scale", s) },
-                                    onTransformEnd = commitLayoutPrefs
-                                ) {
-                                    GamepadBumperButton(config.leftBumper, true, pressButton, releaseButton)
+                                // Right stack: RB above RT
+                                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                    EditableComponentWrapper(
+                                        isEditMode = isEditMode,
+                                        offsetX = rightTriggerOffsetX,
+                                        offsetY = rightTriggerOffsetY,
+                                        scale = rightTriggerScale,
+                                        onOffsetChange = { x, y -> rightTriggerOffsetX = x; rightTriggerOffsetY = y; saveLayoutPref("${config.id}_right_trigger_x", x); saveLayoutPref("${config.id}_right_trigger_y", y) },
+                                        onScaleChange = { s -> rightTriggerScale = s; saveLayoutPref("${config.id}_right_trigger_scale", s) },
+                                        onTransformEnd = commitLayoutPrefs
+                                    ) {
+                                        GamepadTriggerButton(config.rightTrigger, false, pressButton, releaseButton)
+                                    }
+                                    Spacer(Modifier.height(4.dp))
+                                    EditableComponentWrapper(
+                                        isEditMode = isEditMode,
+                                        offsetX = rightBumperOffsetX,
+                                        offsetY = rightBumperOffsetY,
+                                        scale = rightBumperScale,
+                                        onOffsetChange = { x, y -> rightBumperOffsetX = x; rightBumperOffsetY = y; saveLayoutPref("${config.id}_right_bumper_x", x); saveLayoutPref("${config.id}_right_bumper_y", y) },
+                                        onScaleChange = { s -> rightBumperScale = s; saveLayoutPref("${config.id}_right_bumper_scale", s) },
+                                        onTransformEnd = commitLayoutPrefs
+                                    ) {
+                                        GamepadBumperButton(config.rightBumper, false, pressButton, releaseButton)
+                                    }
                                 }
                             }
+
+                            Spacer(Modifier.height(12.dp))
+
+                            // Large Xbox Guide button
+                            EditableComponentWrapper(
+                                isEditMode = isEditMode,
+                                offsetX = guideOffsetX,
+                                offsetY = guideOffsetY,
+                                scale = guideScale,
+                                onOffsetChange = { x, y -> guideOffsetX = x; guideOffsetY = y; saveLayoutPref("${config.id}_guide_x", x); saveLayoutPref("${config.id}_guide_y", y) },
+                                onScaleChange = { s -> guideScale = s; saveLayoutPref("${config.id}_guide_scale", s) },
+                                onTransformEnd = commitLayoutPrefs
+                            ) {
+                                XboxLogoGuideButton(config.guideButton, pressButton, releaseButton)
+                            }
+
+                            Spacer(Modifier.height(12.dp))
+
+                            // Center buttons (Select, Share, Start) flanking the area below Guide
+                            Row(
+                                modifier = Modifier.fillMaxWidth(0.75f),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                EditableComponentWrapper(
+                                    isEditMode = isEditMode,
+                                    offsetX = selectOffsetX,
+                                    offsetY = selectOffsetY,
+                                    scale = selectScale,
+                                    onOffsetChange = { x, y -> selectOffsetX = x; selectOffsetY = y; saveLayoutPref("${config.id}_select_x", x); saveLayoutPref("${config.id}_select_y", y) },
+                                    onScaleChange = { s -> selectScale = s; saveLayoutPref("${config.id}_select_scale", s) },
+                                    onTransformEnd = commitLayoutPrefs
+                                ) {
+                                    GamepadCenterButton(config.selectButton, pressButton, releaseButton)
+                                }
+                                EditableComponentWrapper(
+                                    isEditMode = isEditMode,
+                                    offsetX = shareOffsetX,
+                                    offsetY = shareOffsetY,
+                                    scale = shareScale,
+                                    onOffsetChange = { x, y -> shareOffsetX = x; shareOffsetY = y; saveLayoutPref("${config.id}_share_x", x); saveLayoutPref("${config.id}_share_y", y) },
+                                    onScaleChange = { s -> shareScale = s; saveLayoutPref("${config.id}_share_scale", s) },
+                                    onTransformEnd = commitLayoutPrefs
+                                ) {
+                                    GamepadCenterButton(config.shareButton, pressButton, releaseButton)
+                                }
+                                EditableComponentWrapper(
+                                    isEditMode = isEditMode,
+                                    offsetX = startOffsetX,
+                                    offsetY = startOffsetY,
+                                    scale = startScale,
+                                    onOffsetChange = { x, y -> startOffsetX = x; startOffsetY = y; saveLayoutPref("${config.id}_start_x", x); saveLayoutPref("${config.id}_start_y", y) },
+                                    onScaleChange = { s -> startScale = s; saveLayoutPref("${config.id}_start_scale", s) },
+                                    onTransformEnd = commitLayoutPrefs
+                                ) {
+                                    GamepadCenterButton(config.startButton, pressButton, releaseButton)
+                                }
+                            }
+                            Spacer(Modifier.weight(1f))
+                        }
+
+                        // Right column: Face Buttons (top), Right Stick (bottom)
+                        Column(
+                            modifier = Modifier.weight(0.3f).fillMaxHeight(),
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.Top
+                        ) {
+                            Spacer(Modifier.height(16.dp))
+                            EditableComponentWrapper(
+                                isEditMode = isEditMode,
+                                offsetX = faceButtonsOffsetX,
+                                offsetY = faceButtonsOffsetY,
+                                scale = faceButtonsScale,
+                                onOffsetChange = { x, y -> faceButtonsOffsetX = x; faceButtonsOffsetY = y; saveLayoutPref("${config.id}_face_buttons_x", x); saveLayoutPref("${config.id}_face_buttons_y", y) },
+                                onScaleChange = { s -> faceButtonsScale = s; saveLayoutPref("${config.id}_face_buttons_scale", s) },
+                                onTransformEnd = commitLayoutPrefs
+                            ) {
+                                FaceButtonsDiamond(
+                                    config = config,
+                                    isXboxStyle = true,
+                                    onPress = pressButton,
+                                    onRelease = releaseButton
+                                )
+                            }
+                            Spacer(Modifier.height(6.dp))
+                            EditableComponentWrapper(
+                                isEditMode = isEditMode,
+                                offsetX = rightStickOffsetX,
+                                offsetY = rightStickOffsetY,
+                                scale = rightStickScale,
+                                onOffsetChange = { x, y -> rightStickOffsetX = x; rightStickOffsetY = y; saveLayoutPref("${config.id}_right_stick_x", x); saveLayoutPref("${config.id}_right_stick_y", y) },
+                                onScaleChange = { s -> rightStickScale = s; saveLayoutPref("${config.id}_right_stick_scale", s) },
+                                onTransformEnd = commitLayoutPrefs
+                            ) {
+                                GamepadAnalogStick(
+                                    label = "R",
+                                    isClicked = { (buttonMask and (1 shl 11)) != 0 },
+                                    isHeld = { (buttonMask and (1 shl 11)) != 0 },
+                                    onMove = { x, y -> rightStickX = x; rightStickY = y; transmitGamepadState(false) },
+                                    onStickClick = { scope.launch { pressButton(11); delay(100L.milliseconds); releaseButton(11) } },
+                                    onToggleHold = { hold -> if (hold) pressButton(11) else releaseButton(11) }
+                                )
+                            }
+                            Spacer(Modifier.height(12.dp))
+                        }
+                    } else {
+                        // ── PLAYSTATION-STYLE SYMMETRICAL LAYOUT ──
+                        // Left Column: split Dpad (top), Left Stick (bottom)
+                        Column(
+                            modifier = Modifier.weight(0.3f).fillMaxHeight(),
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.Top
+                        ) {
+                            Spacer(Modifier.height(26.dp))
+                            EditableComponentWrapper(
+                                isEditMode = isEditMode,
+                                offsetX = dpadOffsetX,
+                                offsetY = dpadOffsetY,
+                                scale = dpadScale,
+                                onOffsetChange = { x, y -> dpadOffsetX = x; dpadOffsetY = y; saveLayoutPref("${config.id}_dpad_x", x); saveLayoutPref("${config.id}_dpad_y", y) },
+                                onScaleChange = { s -> dpadScale = s; saveLayoutPref("${config.id}_dpad_scale", s) },
+                                onTransformEnd = commitLayoutPrefs
+                            ) {
+                                GamepadDpad(
+                                    isXboxStyle = false,
+                                    onDpadChange = { mask ->
+                                        dpadMask = mask
+                                        transmitGamepadState(true)
+                                        if (mask != 0) triggerVibration(15)
+                                    }
+                                )
+                            }
+                            Spacer(Modifier.height(16.dp))
+                            EditableComponentWrapper(
+                                isEditMode = isEditMode,
+                                offsetX = leftStickOffsetX,
+                                offsetY = leftStickOffsetY,
+                                scale = leftStickScale,
+                                onOffsetChange = { x, y -> leftStickOffsetX = x; leftStickOffsetY = y; saveLayoutPref("${config.id}_left_stick_x", x); saveLayoutPref("${config.id}_left_stick_y", y) },
+                                onScaleChange = { s -> leftStickScale = s; saveLayoutPref("${config.id}_left_stick_scale", s) },
+                                onTransformEnd = commitLayoutPrefs
+                            ) {
+                                GamepadAnalogStick(
+                                    label = "L",
+                                    isClicked = { (buttonMask and (1 shl 10)) != 0 },
+                                    isHeld = { (buttonMask and (1 shl 10)) != 0 },
+                                    onMove = { x, y -> leftStickX = x; leftStickY = y; transmitGamepadState(false) },
+                                    onStickClick = { scope.launch { pressButton(10); delay(100L.milliseconds); releaseButton(10) } },
+                                    onToggleHold = { hold -> if (hold) pressButton(10) else releaseButton(10) }
+                                )
+                            }
+                        }
+
+                        // Center Column: PS Button + L1/L2 R1/R2, Right Stick/Left Stick spacing
+                        Column(
+                            modifier = Modifier.weight(0.4f).fillMaxHeight(),
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.Top
+                        ) {
+                            Spacer(Modifier.height(16.dp))
+                            // Bumper/Trigger stacks
+                            Row(
+                                modifier = Modifier.fillMaxWidth().padding(horizontal = 6.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.Top
+                            ) {
+                                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                    EditableComponentWrapper(
+                                        isEditMode = isEditMode,
+                                        offsetX = leftTriggerOffsetX,
+                                        offsetY = leftTriggerOffsetY,
+                                        scale = leftTriggerScale,
+                                        onOffsetChange = { x, y -> leftTriggerOffsetX = x; leftTriggerOffsetY = y; saveLayoutPref("${config.id}_left_trigger_x", x); saveLayoutPref("${config.id}_left_trigger_y", y) },
+                                        onScaleChange = { s -> leftTriggerScale = s; saveLayoutPref("${config.id}_left_trigger_scale", s) },
+                                        onTransformEnd = commitLayoutPrefs
+                                    ) {
+                                        GamepadTriggerButton(config.leftTrigger, true, pressButton, releaseButton)
+                                    }
+                                    Spacer(Modifier.height(4.dp))
+                                    EditableComponentWrapper(
+                                        isEditMode = isEditMode,
+                                        offsetX = leftBumperOffsetX,
+                                        offsetY = leftBumperOffsetY,
+                                        scale = leftBumperScale,
+                                        onOffsetChange = { x, y -> leftBumperOffsetX = x; leftBumperOffsetY = y; saveLayoutPref("${config.id}_left_bumper_x", x); saveLayoutPref("${config.id}_left_bumper_y", y) },
+                                        onScaleChange = { s -> leftBumperScale = s; saveLayoutPref("${config.id}_left_bumper_scale", s) },
+                                        onTransformEnd = commitLayoutPrefs
+                                    ) {
+                                        GamepadBumperButton(config.leftBumper, true, pressButton, releaseButton)
+                                    }
+                                }
                             
-                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                    EditableComponentWrapper(
+                                        isEditMode = isEditMode,
+                                        offsetX = rightTriggerOffsetX,
+                                        offsetY = rightTriggerOffsetY,
+                                        scale = rightTriggerScale,
+                                        onOffsetChange = { x, y -> rightTriggerOffsetX = x; rightTriggerOffsetY = y; saveLayoutPref("${config.id}_right_trigger_x", x); saveLayoutPref("${config.id}_right_trigger_y", y) },
+                                        onScaleChange = { s -> rightTriggerScale = s; saveLayoutPref("${config.id}_right_trigger_scale", s) },
+                                        onTransformEnd = commitLayoutPrefs
+                                    ) {
+                                        GamepadTriggerButton(config.rightTrigger, false, pressButton, releaseButton)
+                                    }
+                                    Spacer(Modifier.height(4.dp))
+                                    EditableComponentWrapper(
+                                        isEditMode = isEditMode,
+                                        offsetX = rightBumperOffsetX,
+                                        offsetY = rightBumperOffsetY,
+                                        scale = rightBumperScale,
+                                        onOffsetChange = { x, y -> rightBumperOffsetX = x; rightBumperOffsetY = y; saveLayoutPref("${config.id}_right_bumper_x", x); saveLayoutPref("${config.id}_right_bumper_y", y) },
+                                        onScaleChange = { s -> rightBumperScale = s; saveLayoutPref("${config.id}_right_bumper_scale", s) },
+                                        onTransformEnd = commitLayoutPrefs
+                                    ) {
+                                        GamepadBumperButton(config.rightBumper, false, pressButton, releaseButton)
+                                    }
+                                }
+                            }
+
+                            Spacer(Modifier.height(14.dp))
+
+                            // PlayStation Guide button
+                            EditableComponentWrapper(
+                                isEditMode = isEditMode,
+                                offsetX = guideOffsetX,
+                                offsetY = guideOffsetY,
+                                scale = guideScale,
+                                onOffsetChange = { x, y -> guideOffsetX = x; guideOffsetY = y; saveLayoutPref("${config.id}_guide_x", x); saveLayoutPref("${config.id}_guide_y", y) },
+                                onScaleChange = { s -> guideScale = s; saveLayoutPref("${config.id}_guide_scale", s) },
+                                onTransformEnd = commitLayoutPrefs
+                            ) {
+                                PlayStationLogoButton(config.guideButton, pressButton, releaseButton)
+                            }
+
+                            Spacer(Modifier.height(12.dp))
+
+                            // Center buttons (Select, Share, Start) flanking the area below Guide
+                            Row(
+                                modifier = Modifier.fillMaxWidth(0.75f),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
                                 EditableComponentWrapper(
                                     isEditMode = isEditMode,
-                                    offsetX = rightTriggerOffsetX,
-                                    offsetY = rightTriggerOffsetY,
-                                    scale = rightTriggerScale,
-                                    onOffsetChange = { x, y -> rightTriggerOffsetX = x; rightTriggerOffsetY = y; saveLayoutPref("${config.id}_right_trigger_x", x); saveLayoutPref("${config.id}_right_trigger_y", y) },
-                                    onScaleChange = { s -> rightTriggerScale = s; saveLayoutPref("${config.id}_right_trigger_scale", s) },
+                                    offsetX = selectOffsetX,
+                                    offsetY = selectOffsetY,
+                                    scale = selectScale,
+                                    onOffsetChange = { x, y -> selectOffsetX = x; selectOffsetY = y; saveLayoutPref("${config.id}_select_x", x); saveLayoutPref("${config.id}_select_y", y) },
+                                    onScaleChange = { s -> selectScale = s; saveLayoutPref("${config.id}_select_scale", s) },
                                     onTransformEnd = commitLayoutPrefs
                                 ) {
-                                    GamepadTriggerButton(config.rightTrigger, false, pressButton, releaseButton)
+                                    GamepadCenterButton(config.selectButton, pressButton, releaseButton)
                                 }
-                                Spacer(Modifier.height(4.dp))
                                 EditableComponentWrapper(
                                     isEditMode = isEditMode,
-                                    offsetX = rightBumperOffsetX,
-                                    offsetY = rightBumperOffsetY,
-                                    scale = rightBumperScale,
-                                    onOffsetChange = { x, y -> rightBumperOffsetX = x; rightBumperOffsetY = y; saveLayoutPref("${config.id}_right_bumper_x", x); saveLayoutPref("${config.id}_right_bumper_y", y) },
-                                    onScaleChange = { s -> rightBumperScale = s; saveLayoutPref("${config.id}_right_bumper_scale", s) },
+                                    offsetX = shareOffsetX,
+                                    offsetY = shareOffsetY,
+                                    scale = shareScale,
+                                    onOffsetChange = { x, y -> shareOffsetX = x; shareOffsetY = y; saveLayoutPref("${config.id}_share_x", x); saveLayoutPref("${config.id}_share_y", y) },
+                                    onScaleChange = { s -> shareScale = s; saveLayoutPref("${config.id}_share_scale", s) },
                                     onTransformEnd = commitLayoutPrefs
                                 ) {
-                                    GamepadBumperButton(config.rightBumper, false, pressButton, releaseButton)
+                                    GamepadCenterButton(config.shareButton, pressButton, releaseButton)
+                                }
+                                EditableComponentWrapper(
+                                    isEditMode = isEditMode,
+                                    offsetX = startOffsetX,
+                                    offsetY = startOffsetY,
+                                    scale = startScale,
+                                    onOffsetChange = { x, y -> startOffsetX = x; startOffsetY = y; saveLayoutPref("${config.id}_start_x", x); saveLayoutPref("${config.id}_start_y", y) },
+                                    onScaleChange = { s -> startScale = s; saveLayoutPref("${config.id}_start_scale", s) },
+                                    onTransformEnd = commitLayoutPrefs
+                                ) {
+                                    GamepadCenterButton(config.startButton, pressButton, releaseButton)
                                 }
                             }
+                            Spacer(Modifier.weight(1f))
                         }
 
-                        Spacer(Modifier.height(14.dp))
-
-                        // PlayStation Guide button
-                        EditableComponentWrapper(
-                            isEditMode = isEditMode,
-                            offsetX = guideOffsetX,
-                            offsetY = guideOffsetY,
-                            scale = guideScale,
-                            onOffsetChange = { x, y -> guideOffsetX = x; guideOffsetY = y; saveLayoutPref("${config.id}_guide_x", x); saveLayoutPref("${config.id}_guide_y", y) },
-                            onScaleChange = { s -> guideScale = s; saveLayoutPref("${config.id}_guide_scale", s) },
-                            onTransformEnd = commitLayoutPrefs
+                        // Right Column: Face Buttons (top), Right Stick (bottom)
+                        Column(
+                            modifier = Modifier.weight(0.3f).fillMaxHeight(),
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.Top
                         ) {
-                            PlayStationLogoButton(config.guideButton, pressButton, releaseButton)
-                        }
-
-                        Spacer(Modifier.height(12.dp))
-
-                        // Center buttons (Select, Share, Start) flanking the area below Guide
-                        Row(
-                            modifier = Modifier.fillMaxWidth(0.75f),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
+                            Spacer(Modifier.height(16.dp))
                             EditableComponentWrapper(
                                 isEditMode = isEditMode,
-                                offsetX = selectOffsetX,
-                                offsetY = selectOffsetY,
-                                scale = selectScale,
-                                onOffsetChange = { x, y -> selectOffsetX = x; selectOffsetY = y; saveLayoutPref("${config.id}_select_x", x); saveLayoutPref("${config.id}_select_y", y) },
-                                onScaleChange = { s -> selectScale = s; saveLayoutPref("${config.id}_select_scale", s) },
+                                offsetX = faceButtonsOffsetX,
+                                offsetY = faceButtonsOffsetY,
+                                scale = faceButtonsScale,
+                                onOffsetChange = { x, y -> faceButtonsOffsetX = x; faceButtonsOffsetY = y; saveLayoutPref("${config.id}_face_buttons_x", x); saveLayoutPref("${config.id}_face_buttons_y", y) },
+                                onScaleChange = { s -> faceButtonsScale = s; saveLayoutPref("${config.id}_face_buttons_scale", s) },
                                 onTransformEnd = commitLayoutPrefs
                             ) {
-                                GamepadCenterButton(config.selectButton, pressButton, releaseButton)
+                                FaceButtonsDiamond(
+                                    config = config,
+                                    isXboxStyle = false,
+                                    onPress = pressButton,
+                                    onRelease = releaseButton
+                                )
                             }
+                            Spacer(Modifier.height(6.dp))
                             EditableComponentWrapper(
                                 isEditMode = isEditMode,
-                                offsetX = shareOffsetX,
-                                offsetY = shareOffsetY,
-                                scale = shareScale,
-                                onOffsetChange = { x, y -> shareOffsetX = x; shareOffsetY = y; saveLayoutPref("${config.id}_share_x", x); saveLayoutPref("${config.id}_share_y", y) },
-                                onScaleChange = { s -> shareScale = s; saveLayoutPref("${config.id}_share_scale", s) },
+                                offsetX = rightStickOffsetX,
+                                offsetY = rightStickOffsetY,
+                                scale = rightStickScale,
+                                onOffsetChange = { x, y -> rightStickOffsetX = x; rightStickOffsetY = y; saveLayoutPref("${config.id}_right_stick_x", x); saveLayoutPref("${config.id}_right_stick_y", y) },
+                                onScaleChange = { s -> rightStickScale = s; saveLayoutPref("${config.id}_right_stick_scale", s) },
                                 onTransformEnd = commitLayoutPrefs
                             ) {
-                                GamepadCenterButton(config.shareButton, pressButton, releaseButton)
+                                GamepadAnalogStick(
+                                    label = "R",
+                                    isClicked = { (buttonMask and (1 shl 11)) != 0 },
+                                    isHeld = { (buttonMask and (1 shl 11)) != 0 },
+                                    onMove = { x, y -> rightStickX = x; rightStickY = y; transmitGamepadState(false) },
+                                    onStickClick = { scope.launch { pressButton(11); delay(100L.milliseconds); releaseButton(11) } },
+                                    onToggleHold = { hold -> if (hold) pressButton(11) else releaseButton(11) }
+                                )
                             }
-                            EditableComponentWrapper(
-                                isEditMode = isEditMode,
-                                offsetX = startOffsetX,
-                                offsetY = startOffsetY,
-                                scale = startScale,
-                                onOffsetChange = { x, y -> startOffsetX = x; startOffsetY = y; saveLayoutPref("${config.id}_start_x", x); saveLayoutPref("${config.id}_start_y", y) },
-                                onScaleChange = { s -> startScale = s; saveLayoutPref("${config.id}_start_scale", s) },
-                                onTransformEnd = commitLayoutPrefs
-                            ) {
-                                GamepadCenterButton(config.startButton, pressButton, releaseButton)
-                            }
-                        }
-                        Spacer(Modifier.weight(1f))
-                    }
-
-                    // Right Column: Face Buttons (top), Right Stick (bottom)
-                    Column(
-                        modifier = Modifier.weight(0.3f).fillMaxHeight(),
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.Top
-                    ) {
-                        Spacer(Modifier.height(16.dp))
-                        EditableComponentWrapper(
-                            isEditMode = isEditMode,
-                            offsetX = faceButtonsOffsetX,
-                            offsetY = faceButtonsOffsetY,
-                            scale = faceButtonsScale,
-                            onOffsetChange = { x, y -> faceButtonsOffsetX = x; faceButtonsOffsetY = y; saveLayoutPref("${config.id}_face_buttons_x", x); saveLayoutPref("${config.id}_face_buttons_y", y) },
-                            onScaleChange = { s -> faceButtonsScale = s; saveLayoutPref("${config.id}_face_buttons_scale", s) },
-                            onTransformEnd = commitLayoutPrefs
-                        ) {
-                            FaceButtonsDiamond(
-                                config = config,
-                                isXboxStyle = false,
-                                onPress = pressButton,
-                                onRelease = releaseButton
-                            )
-                        }
-                        Spacer(Modifier.height(6.dp))
-                        EditableComponentWrapper(
-                            isEditMode = isEditMode,
-                            offsetX = rightStickOffsetX,
-                            offsetY = rightStickOffsetY,
-                            scale = rightStickScale,
-                            onOffsetChange = { x, y -> rightStickOffsetX = x; rightStickOffsetY = y; saveLayoutPref("${config.id}_right_stick_x", x); saveLayoutPref("${config.id}_right_stick_y", y) },
-                            onScaleChange = { s -> rightStickScale = s; saveLayoutPref("${config.id}_right_stick_scale", s) },
-                            onTransformEnd = commitLayoutPrefs
-                        ) {
-                            GamepadAnalogStick(
-                                label = "R",
-                                isClicked = { (buttonMask and (1 shl 11)) != 0 },
-                                isHeld = { (buttonMask and (1 shl 11)) != 0 },
-                                onMove = { x, y -> rightStickX = x; rightStickY = y; transmitGamepadState(false) },
-                                onStickClick = { scope.launch { pressButton(11); delay(100L.milliseconds); releaseButton(11) } },
-                                onToggleHold = { hold -> if (hold) pressButton(11) else releaseButton(11) }
-                            )
                         }
                     }
                 }
@@ -1213,6 +1233,38 @@ fun GamepadView(
         }
     }
 }
+}
+
+// The gamepad is a two-thumb layout; in portrait there is no room for it, so show a clear hint
+// (the top bar above keeps working: Close, mode switch, reconnect, settings).
+@Composable
+private fun PortraitGamepadHint(modifier: Modifier = Modifier) {
+    Column(
+        modifier = modifier.padding(32.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center,
+    ) {
+        Icon(
+            imageVector = Icons.Default.ScreenRotation,
+            contentDescription = null,
+            tint = Color.White.copy(alpha = 0.7f),
+            modifier = Modifier.size(56.dp),
+        )
+        Spacer(Modifier.height(16.dp))
+        Text(
+            text = "Putar perangkat ke landscape",
+            color = Color.White,
+            fontSize = 18.sp,
+            fontWeight = FontWeight.Bold,
+        )
+        Spacer(Modifier.height(6.dp))
+        Text(
+            text = "Gamepad dipakai dengan dua jempol, jadi tampil penuh saat landscape. Pastikan Auto-rotate aktif.",
+            color = Color.White.copy(alpha = 0.7f),
+            fontSize = 13.sp,
+            textAlign = TextAlign.Center,
+        )
+    }
 }
 
 // ── Sub-Components ──

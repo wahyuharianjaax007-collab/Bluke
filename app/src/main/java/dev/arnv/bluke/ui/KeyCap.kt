@@ -166,9 +166,10 @@ fun KeyCap(
                     maxLines = 1,
                     softWrap = false,
                     overflow = TextOverflow.Clip,
-                    modifier = Modifier.padding(
-                        (baseUnitWidth.value * 0.04f).coerceIn(0.5f, 2f).dp,
-                    ),
+                    // unbounded height: small keys (portrait) no longer clip the bottom of the legend
+                    modifier = Modifier
+                        .padding((baseUnitWidth.value * 0.04f).coerceIn(0.5f, 2f).dp)
+                        .wrapContentHeight(align = Alignment.CenterVertically, unbounded = true),
                 )
             }
         }
