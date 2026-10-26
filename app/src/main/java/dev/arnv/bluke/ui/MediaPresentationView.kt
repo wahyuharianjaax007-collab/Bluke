@@ -54,7 +54,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -79,10 +78,6 @@ import dev.arnv.bluke.QuickCycleActivity
 import dev.arnv.bluke.RemoteVolumeKeyHost
 import dev.arnv.bluke.bluetooth.BluetoothKeyboardManager
 import dev.arnv.bluke.bluetooth.ConsumerControl
-import kotlinx.coroutines.Job
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.isActive
-import kotlinx.coroutines.launch
 import kotlin.math.abs
 import kotlin.math.min
 
@@ -494,14 +489,13 @@ private fun MultimediaButtonDeck(
 
         Column(verticalArrangement = Arrangement.spacedBy(verticalGap)) {
             Row(horizontalArrangement = Arrangement.spacedBy(horizontalGap)) {
-                BrightnessButton(
-                    label = "Brightness down",
-                    icon = Icons.Default.BrightnessLow,
-                    delta = -ScreenBrightness.STEP,
-                    width = buttonWidth,
-                    height = buttonHeight,
-                    contentRotation = contentRotation,
-                    triggerVibration = triggerVibration,
+                MultimediaActionButton(
+                    brightnessDownAction,
+                    btManager,
+                    buttonWidth,
+                    buttonHeight,
+                    contentRotation,
+                    triggerVibration,
                 )
                 MultimediaActionButton(
                     RemoteAction.Key("Up", Icons.Default.KeyboardArrowUp, KeyboardLayouts.KEY_UP),
@@ -510,14 +504,13 @@ private fun MultimediaButtonDeck(
                     buttonHeight,
                     triggerVibration = triggerVibration,
                 )
-                BrightnessButton(
-                    label = "Brightness up",
-                    icon = Icons.Default.BrightnessHigh,
-                    delta = ScreenBrightness.STEP,
-                    width = buttonWidth,
-                    height = buttonHeight,
-                    contentRotation = contentRotation,
-                    triggerVibration = triggerVibration,
+                MultimediaActionButton(
+                    brightnessUpAction,
+                    btManager,
+                    buttonWidth,
+                    buttonHeight,
+                    contentRotation,
+                    triggerVibration,
                 )
             }
             Row(horizontalArrangement = Arrangement.spacedBy(horizontalGap)) {
@@ -805,54 +798,6 @@ private fun MultimediaActionButton(
     )
 }
 
-/** Changes the phone's own brightness; holding the button repeats the step. */
-@Composable
-private fun BrightnessButton(
-    label: String,
-    icon: ImageVector,
-    delta: Int,
-    width: Dp,
-    height: Dp,
-    contentRotation: Float,
-    triggerVibration: (Long) -> Unit,
-) {
-    val context = LocalContext.current
-    val scope = rememberCoroutineScope()
-    var repeatJob by remember { mutableStateOf<Job?>(null) }
-    DisposableEffect(Unit) { onDispose { repeatJob?.cancel() } }
-
-    Box(Modifier.width(width).height(height)) {
-        RemoteHoldButton(
-            label = label,
-            icon = icon,
-            modifier = Modifier.fillMaxSize(),
-            fillHeight = true,
-            showLabel = false,
-            contentRotation = contentRotation,
-            cornerRadius = 8.dp,
-            showBorder = false,
-            containerColor = RemoteButtonColor,
-            contentColor = RemoteContentColor,
-            onPressFeedback = { triggerVibration(15) },
-            onPressedChange = { pressed ->
-                repeatJob?.cancel()
-                repeatJob = null
-                if (pressed) {
-                    repeatJob = scope.launch {
-                        // Stop repeating when the permission screen had to be opened.
-                        if (!ScreenBrightness.change(context, delta)) return@launch
-                        delay(350)
-                        while (isActive) {
-                            ScreenBrightness.change(context, delta)
-                            delay(90)
-                        }
-                    }
-                }
-            },
-        )
-    }
-}
-
 private sealed interface RemoteAction {
     val label: String
     val icon: ImageVector?
@@ -873,6 +818,8 @@ private sealed interface RemoteAction {
 private val muteAction = RemoteAction.Consumer("Mute", Icons.AutoMirrored.Filled.VolumeOff, ConsumerControl.MUTE)
 private val volumeUpAction = RemoteAction.Consumer("Volume up", Icons.AutoMirrored.Filled.VolumeUp, ConsumerControl.VOLUME_UP)
 private val volumeDownAction = RemoteAction.Consumer("Volume down", Icons.AutoMirrored.Filled.VolumeDown, ConsumerControl.VOLUME_DOWN)
+private val brightnessDownAction = RemoteAction.Consumer("Brightness down", Icons.Default.BrightnessLow, ConsumerControl.BRIGHTNESS_DOWN)
+private val brightnessUpAction = RemoteAction.Consumer("Brightness up", Icons.Default.BrightnessHigh, ConsumerControl.BRIGHTNESS_UP)
 private val previousAction = RemoteAction.Consumer("Previous track", Icons.Default.SkipPrevious, ConsumerControl.PREVIOUS_TRACK)
 private val playAction = RemoteAction.Consumer("Play or pause", Icons.Default.PlayArrow, ConsumerControl.PLAY_PAUSE)
 private val nextAction = RemoteAction.Consumer("Next track", Icons.Default.SkipNext, ConsumerControl.NEXT_TRACK)
