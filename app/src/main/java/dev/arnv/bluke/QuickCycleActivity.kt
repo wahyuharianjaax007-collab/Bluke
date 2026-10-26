@@ -29,7 +29,7 @@ class QuickCycleActivity : ComponentActivity() {
         val preferences = getSharedPreferences("app_prefs", MODE_PRIVATE)
         setContent {
             MyApplicationTheme {
-                val modeIds = InputMode.entries.map { it.preferenceKey }
+                val modeIds = InputMode.entries.filter { it != InputMode.GAMEPAD }.map { it.preferenceKey }
                 var selectedModes by remember {
                     mutableStateOf(normalizedCycleSelection(preferences.getStringSet("cycle_connection_modes", null), modeIds))
                 }
@@ -56,7 +56,7 @@ class QuickCycleActivity : ComponentActivity() {
                         )
                         SettingsCardGroup(
                             title = "Input modes",
-                            items = InputMode.entries.map { mode ->
+                            items = InputMode.entries.filter { it != InputMode.GAMEPAD }.map { mode ->
                                 SettingsItemData(
                                     title = mode.displayName,
                                     icon = { Icon(Icons.Default.SportsEsports, null, tint = MaterialTheme.colorScheme.primary) },
