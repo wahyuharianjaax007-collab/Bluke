@@ -70,6 +70,34 @@ android {
       // Same signing key on every build: new APKs update over old ones
       signingConfig = signingConfigs.getByName("debugConfig")
     }
+    // Slim build for sharing/installing: same package + same signing key as "debug" (so it updates
+    // over an installed debug build), but with R8 code shrinking and resource shrinking turned on.
+    // A debug APK ships every unused Material icon and the whole unoptimised Compose runtime, which
+    // is why it is several times bigger and also noticeably laggier than this build.
+    create("fork") {
+      initWith(getByName("release"))
+      applicationIdSuffix = ".fork"
+      signingConfig = signingConfigs.getByName("debugConfig")
+      matchingFallbacks += listOf("release")
+      isDebuggable = false
+    }
+  }
+  // The app only has English strings; drop the ~80 translations that Compose/Material libraries bundle.
+  androidResources {
+    localeFilters += listOf("en", "id")
+  }
+  packaging {
+    resources {
+      excludes += setOf(
+        "/META-INF/{AL2.0,LGPL2.1}",
+        "/META-INF/*.version",
+        "/META-INF/com/android/build/gradle/app-metadata.properties",
+        "DebugProbesKt.bin",
+        "kotlin-tooling-metadata.json",
+        "**/*.kotlin_builtins",
+        "**/*.kotlin_module",
+      )
+    }
   }
   compileOptions {
     sourceCompatibility = JavaVersion.VERSION_17
