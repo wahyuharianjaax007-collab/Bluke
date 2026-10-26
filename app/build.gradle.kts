@@ -15,7 +15,8 @@ android {
     applicationId = "dev.arnv.bluke"
     minSdk = 28
     targetSdk = 36
-    versionCode = 10
+    // CI sets GITHUB_RUN_NUMBER, so every build has a higher versionCode and installs as an update
+    versionCode = (System.getenv("GITHUB_RUN_NUMBER")?.toIntOrNull() ?: 0) + 100
     versionName = "1.1.0"
 
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
@@ -64,6 +65,10 @@ android {
       signingConfig = signingConfigs.getByName("release")
     }
     debug {
+      // Own package name: never clashes with the original Bluke app
+      applicationIdSuffix = ".fork"
+      // Same signing key on every build: new APKs update over old ones
+      signingConfig = signingConfigs.getByName("debugConfig")
     }
   }
   compileOptions {
@@ -124,4 +129,3 @@ kotlin {
     jvmTarget = JvmTarget.JVM_17
   }
 }
-
