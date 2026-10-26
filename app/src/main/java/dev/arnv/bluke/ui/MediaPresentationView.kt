@@ -223,7 +223,7 @@ internal fun MediaPresentationView(
         }
     }
 
-    val resolvedPosture = postureOverride ?: posture
+    val resolvedPosture = postureOverride ?: MultimediaPosture.PORTRAIT_HELD
     val cycleSensitivity = {
         sensitivity = nextTouchpadSpeed(sensitivity)
         sharedPrefs.edit { putFloat("touchpad_sensitivity", sensitivity) }
