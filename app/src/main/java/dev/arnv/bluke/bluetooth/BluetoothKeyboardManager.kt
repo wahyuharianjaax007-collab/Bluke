@@ -5,6 +5,7 @@ import android.bluetooth.BluetoothAdapter
 import android.bluetooth.BluetoothManager
 import android.bluetooth.BluetoothDevice
 import android.bluetooth.BluetoothHidDevice
+import android.bluetooth.BluetoothHidDeviceAppQosSettings
 import android.bluetooth.BluetoothHidDeviceAppSdpSettings
 import android.bluetooth.BluetoothProfile
 import android.content.BroadcastReceiver
@@ -63,6 +64,20 @@ class BluetoothKeyboardManager(private val context: Context) {
             runnable.run()
         }, "bt-report-sender")
     }
+
+    /**
+     * Without QoS the Bluetooth stack lets the link go into a long power-saving interval after a
+     * short pause, so the first movements after stopping the cursor arrive late. Asking for a ~11 ms
+     * latency keeps the link responsive (the same values other HID mouse apps use).
+     */
+    private val lowLatencyQos = BluetoothHidDeviceAppQosSettings(
+        BluetoothHidDeviceAppQosSettings.SERVICE_BEST_EFFORT,
+        800,
+        9,
+        0,
+        11250,
+        BluetoothHidDeviceAppQosSettings.MAX,
+    )
 
     private val reportDiagnostics = HidReportDiagnostics()
 
@@ -1390,7 +1405,7 @@ class BluetoothKeyboardManager(private val context: Context) {
                         logHidEvent("command register requestedMode=$registrationMode descriptorLength=${descriptor.size} descriptorSha256=$hash descriptor=[${descriptor.joinToString(" ") { "%02X".format(it) }}]")
                     }
                     val accepted = try {
-                        hid.registerApp(settings, null, null, executor, createHidCallback(attempt))
+                        hid.registerApp(settings, null, lowLatencyQos, executor, createHidCallback(attempt))
                     } catch (e: Exception) {
                         Log.w("BluetoothKeyboard", "registerApp failed", e)
                         false
