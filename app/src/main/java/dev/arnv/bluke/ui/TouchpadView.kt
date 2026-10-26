@@ -810,18 +810,18 @@ fun NumpadLedGrid(onKeyPress: (Int, Boolean) -> Unit) {
 }
 
 /**
- * Plain mutable holders for per-event touch data. These were `mutableFloatStateOf`, which made every
- * MOVE event write to the Compose snapshot system. They are only read inside the pointer coroutine,
- * so they never need to trigger recomposition.
+ * Per-event touch data. These used to be `mutableFloatStateOf`, which made every MOVE event write
+ * to the Compose snapshot system. They are only read inside the pointer coroutine, so a plain
+ * object is enough and never triggers recomposition.
  */
-private class PlainFloat(var v: Float = 0f) {
-    operator fun getValue(thisRef: Any?, property: kotlin.reflect.KProperty<*>): Float = v
-    operator fun setValue(thisRef: Any?, property: kotlin.reflect.KProperty<*>, value: Float) { v = value }
-}
-
-private class PlainLong(var v: Long = 0L) {
-    operator fun getValue(thisRef: Any?, property: kotlin.reflect.KProperty<*>): Long = v
-    operator fun setValue(thisRef: Any?, property: kotlin.reflect.KProperty<*>, value: Long) { v = value }
+private class TouchTrackingState {
+    @JvmField var accumulatedX = 0f
+    @JvmField var accumulatedY = 0f
+    @JvmField var lastPointX = 0f
+    @JvmField var lastPointY = 0f
+    @JvmField var lastTwoFingerY = 0f
+    @JvmField var accumulatedScrollY = 0f
+    @JvmField var lastReportTime = 0L
 }
 
 /** Minimum gap between two movement reports. Low enough not to halve a 120 Hz touch stream. */
@@ -838,15 +838,9 @@ fun TouchGestureLayer(
 ) {
     // Tracking points and states for reliable swipe gesture translation
     var lastActivePointerId by remember { mutableStateOf<PointerId?>(null) }
-    var accumulatedX by remember { PlainFloat() }
-    var accumulatedY by remember { PlainFloat() }
-    var lastPointX by remember { PlainFloat() }
-    var lastPointY by remember { PlainFloat() }
 
     // Multi-touch tracking
     var isTwoFingerActive by remember { mutableStateOf(false) }
-    var lastTwoFingerY by remember { PlainFloat() }
-    var accumulatedScrollY by remember { PlainFloat() }
 
     // Tap tracking
     val pointerDownInfo = remember { mutableMapOf<PointerId, Pair<Long, Offset>>() }
@@ -860,7 +854,7 @@ fun TouchGestureLayer(
     }
 
     // Rate limiting to prevent Bluetooth L2CAP packet flooding
-    var lastReportTime by remember { PlainLong() }
+    val touchState = remember { TouchTrackingState() }
 
     // Visual pointer (touchpad thumb) tracking states
     var isTouchActive by remember { mutableStateOf(false) }
@@ -930,23 +924,23 @@ fun TouchGestureLayer(
 
                         if (downCount == 1) {
                             isTwoFingerActive = false
-                            accumulatedScrollY = 0f
+                            touchState.accumulatedScrollY = 0f
                             val pointer = changes.first { it.pressed }
                             
                             if (lastActivePointerId != pointer.id || !pointer.previousPressed) {
                                 lastActivePointerId = pointer.id
-                                accumulatedX = 0f
-                                accumulatedY = 0f
-                                lastPointX = pointer.position.x
-                                lastPointY = pointer.position.y
+                                touchState.accumulatedX = 0f
+                                touchState.accumulatedY = 0f
+                                touchState.lastPointX = pointer.position.x
+                                touchState.lastPointY = pointer.position.y
                             } else {
-                                accumulatedX += (pointer.position.x - lastPointX) * sensitivity
-                                accumulatedY += (pointer.position.y - lastPointY) * sensitivity
+                                touchState.accumulatedX += (pointer.position.x - touchState.lastPointX) * sensitivity
+                                touchState.accumulatedY += (pointer.position.y - touchState.lastPointY) * sensitivity
 
                                 val now = System.currentTimeMillis()
-                                if (now - lastReportTime >= MOUSE_REPORT_INTERVAL_MS) {
-                                    val sendX = accumulatedX.roundToInt().coerceIn(-127, 127)
-                                    val sendY = accumulatedY.roundToInt().coerceIn(-127, 127)
+                                if (now - touchState.lastReportTime >= MOUSE_REPORT_INTERVAL_MS) {
+                                    val sendX = touchState.accumulatedX.roundToInt().coerceIn(-127, 127)
+                                    val sendY = touchState.accumulatedY.roundToInt().coerceIn(-127, 127)
 
                                     if (sendX != 0 || sendY != 0) {
                                         if (tapDrag.move()) {
@@ -954,14 +948,14 @@ fun TouchGestureLayer(
                                         } else {
                                             btManager.sendMouseReport(activeMouseButton, sendX.toByte(), sendY.toByte(), 0)
                                         }
-                                        accumulatedX -= sendX
-                                        accumulatedY -= sendY
-                                        lastReportTime = now
+                                        touchState.accumulatedX -= sendX
+                                        touchState.accumulatedY -= sendY
+                                        touchState.lastReportTime = now
                                     }
                                 }
 
-                                lastPointX = pointer.position.x
-                                lastPointY = pointer.position.y
+                                touchState.lastPointX = pointer.position.x
+                                touchState.lastPointY = pointer.position.y
                             }
 
                             if (!pointer.previousPressed) {
@@ -996,28 +990,28 @@ fun TouchGestureLayer(
                                 val currentYAverage = (pressedList[0].position.y + pressedList[1].position.y) / 2f
                                 if (!isTwoFingerActive) {
                                     isTwoFingerActive = true
-                                    accumulatedScrollY = 0f
-                                    lastTwoFingerY = currentYAverage
+                                    touchState.accumulatedScrollY = 0f
+                                    touchState.lastTwoFingerY = currentYAverage
                                 } else {
-                                    accumulatedScrollY += (currentYAverage - lastTwoFingerY) * 0.06f * scrollSensitivity
+                                    touchState.accumulatedScrollY += (currentYAverage - touchState.lastTwoFingerY) * 0.06f * scrollSensitivity
                                     val now = System.currentTimeMillis()
-                                    if (now - lastReportTime >= MOUSE_REPORT_INTERVAL_MS) {
-                                        val sendScroll = accumulatedScrollY.roundToInt().coerceIn(-127, 127)
+                                    if (now - touchState.lastReportTime >= MOUSE_REPORT_INTERVAL_MS) {
+                                        val sendScroll = touchState.accumulatedScrollY.roundToInt().coerceIn(-127, 127)
                                         if (sendScroll != 0) {
                                             btManager.sendMouseReport(0, 0, 0, sendScroll.toByte())
-                                            accumulatedScrollY -= sendScroll
-                                            lastReportTime = now
+                                            touchState.accumulatedScrollY -= sendScroll
+                                            touchState.lastReportTime = now
                                         }
                                     }
-                                    lastTwoFingerY = currentYAverage
+                                    touchState.lastTwoFingerY = currentYAverage
                                 }
                             }
                         } else {
                             isTwoFingerActive = false
                             lastActivePointerId = null
                             
-                            val sendX = accumulatedX.roundToInt().coerceIn(-127, 127)
-                            val sendY = accumulatedY.roundToInt().coerceIn(-127, 127)
+                            val sendX = touchState.accumulatedX.roundToInt().coerceIn(-127, 127)
+                            val sendY = touchState.accumulatedY.roundToInt().coerceIn(-127, 127)
                             if (sendX != 0 || sendY != 0) {
                                 if (tapDrag.move()) {
                                     btManager.sendMouseReport(1, sendX.toByte(), sendY.toByte(), 0)
@@ -1025,13 +1019,13 @@ fun TouchGestureLayer(
                                     btManager.sendMouseReport(activeMouseButton, sendX.toByte(), sendY.toByte(), 0)
                                 }
                             }
-                            val sendScroll = accumulatedScrollY.roundToInt().coerceIn(-127, 127)
+                            val sendScroll = touchState.accumulatedScrollY.roundToInt().coerceIn(-127, 127)
                             if (sendScroll != 0) {
                                 btManager.sendMouseReport(0, 0, 0, sendScroll.toByte())
                             }
-                            accumulatedX = 0f
-                            accumulatedY = 0f
-                            accumulatedScrollY = 0f
+                            touchState.accumulatedX = 0f
+                            touchState.accumulatedY = 0f
+                            touchState.accumulatedScrollY = 0f
                         }
 
                         // 3. Process Up Events for Taps (Clicks)
@@ -1094,9 +1088,9 @@ fun TouchGestureLayer(
                     pointerDownInfo.clear()
                     lastActivePointerId = null
                     maxPointersInTap = 0
-                    accumulatedX = 0f
-                    accumulatedY = 0f
-                    accumulatedScrollY = 0f
+                    touchState.accumulatedX = 0f
+                    touchState.accumulatedY = 0f
+                    touchState.accumulatedScrollY = 0f
                     isTwoFingerActive = false
                     isTouchActive = false
                     touchCount = 0
