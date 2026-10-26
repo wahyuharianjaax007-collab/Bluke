@@ -27,10 +27,10 @@ jobs:
         uses: gradle/actions/setup-gradle@v3
 
       - name: Build APK
-        run: ./gradlew assembleDebug
+        run: ./gradlew assembleFork
 
       - name: Rename APK
-        run: mv app/build/outputs/apk/debug/app-debug.apk app/build/outputs/apk/debug/bluke-fork-build-${{ github.run_number }}.apk
+        run: mv app/build/outputs/apk/fork/app-fork.apk app/build/outputs/apk/fork/bluke-fork-build-${{ github.run_number }}.apk
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
@@ -38,7 +38,7 @@ jobs:
           tag_name: build-${{ github.run_number }}
           name: Build ${{ github.run_number }}
           body: "APK build ${{ github.run_number }} dari commit ${{ github.sha }}"
-          files: app/build/outputs/apk/debug/bluke-fork-build-${{ github.run_number }}.apk
+          files: app/build/outputs/apk/fork/bluke-fork-build-${{ github.run_number }}.apk
           draft: false
           prerelease: false
         env:
