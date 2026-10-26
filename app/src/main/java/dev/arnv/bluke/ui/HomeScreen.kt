@@ -433,7 +433,7 @@ fun HomeScreen(
         val window = activity.window ?: return@LaunchedEffect
         if (isKeyboardActive) {
             try {
-                activity.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE
+                activity.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
             } catch (e: Exception) {
                 Log.e("HomeScreen", "Error setting orientation to landscape: ${e.message}")
             }
