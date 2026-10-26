@@ -1,0 +1,45 @@
+name: Release APK
+
+# Tidak jalan otomatis. Jalan hanya saat kamu menekan tombol "Run workflow"
+# di tab Actions, jadi satu rilis = satu tekan, berapa pun file yang kamu ubah.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Build APK & Publish Release
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'zulu'
+          java-version: '17'
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v3
+
+      - name: Build APK
+        run: ./gradlew assembleDebug
+
+      - name: Rename APK
+        run: mv app/build/outputs/apk/debug/app-debug.apk app/build/outputs/apk/debug/bluke-fork-build-${{ github.run_number }}.apk
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: build-${{ github.run_number }}
+          name: Build ${{ github.run_number }}
+          body: "APK build ${{ github.run_number }} dari commit ${{ github.sha }}"
+          files: app/build/outputs/apk/debug/bluke-fork-build-${{ github.run_number }}.apk
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
