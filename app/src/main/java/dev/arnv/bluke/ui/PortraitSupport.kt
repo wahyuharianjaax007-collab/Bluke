@@ -27,6 +27,7 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.SideEffect
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.composed
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.platform.LocalConfiguration
@@ -83,9 +84,11 @@ internal fun RemoteSystemBars(isLandscape: Boolean, baseColor: Color) {
 }
 
 /** Navigation-bar padding plus camera-cutout padding on the left/right edges (landscape). */
-internal fun Modifier.remoteRootInsets(): Modifier = this
-    .windowInsetsPadding(WindowInsets.navigationBars)
-    .windowInsetsPadding(WindowInsets.displayCutout.only(WindowInsetsSides.Horizontal))
+internal fun Modifier.remoteRootInsets(): Modifier = composed {
+    Modifier
+        .windowInsetsPadding(WindowInsets.navigationBars)
+        .windowInsetsPadding(WindowInsets.displayCutout.only(WindowInsetsSides.Horizontal))
+}
 
 /**
  * Portrait top bar container. It reserves the status-bar height and paints the same scrim as the
