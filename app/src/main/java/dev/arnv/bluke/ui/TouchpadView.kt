@@ -809,6 +809,24 @@ fun NumpadLedGrid(onKeyPress: (Int, Boolean) -> Unit) {
     }
 }
 
+/**
+ * Plain mutable holders for per-event touch data. These were `mutableFloatStateOf`, which made every
+ * MOVE event write to the Compose snapshot system. They are only read inside the pointer coroutine,
+ * so they never need to trigger recomposition.
+ */
+private class PlainFloat(var v: Float = 0f) {
+    operator fun getValue(thisRef: Any?, property: kotlin.reflect.KProperty<*>): Float = v
+    operator fun setValue(thisRef: Any?, property: kotlin.reflect.KProperty<*>, value: Float) { v = value }
+}
+
+private class PlainLong(var v: Long = 0L) {
+    operator fun getValue(thisRef: Any?, property: kotlin.reflect.KProperty<*>): Long = v
+    operator fun setValue(thisRef: Any?, property: kotlin.reflect.KProperty<*>, value: Long) { v = value }
+}
+
+/** Minimum gap between two movement reports. Low enough not to halve a 120 Hz touch stream. */
+private const val MOUSE_REPORT_INTERVAL_MS = 4L
+
 @Composable
 fun TouchGestureLayer(
     btManager: BluetoothKeyboardManager,
@@ -820,15 +838,15 @@ fun TouchGestureLayer(
 ) {
     // Tracking points and states for reliable swipe gesture translation
     var lastActivePointerId by remember { mutableStateOf<PointerId?>(null) }
-    var accumulatedX by remember { mutableFloatStateOf(0f) }
-    var accumulatedY by remember { mutableFloatStateOf(0f) }
-    var lastPointX by remember { mutableFloatStateOf(0f) }
-    var lastPointY by remember { mutableFloatStateOf(0f) }
+    var accumulatedX by remember { PlainFloat() }
+    var accumulatedY by remember { PlainFloat() }
+    var lastPointX by remember { PlainFloat() }
+    var lastPointY by remember { PlainFloat() }
 
     // Multi-touch tracking
     var isTwoFingerActive by remember { mutableStateOf(false) }
-    var lastTwoFingerY by remember { mutableFloatStateOf(0f) }
-    var accumulatedScrollY by remember { mutableFloatStateOf(0f) }
+    var lastTwoFingerY by remember { PlainFloat() }
+    var accumulatedScrollY by remember { PlainFloat() }
 
     // Tap tracking
     val pointerDownInfo = remember { mutableMapOf<PointerId, Pair<Long, Offset>>() }
@@ -842,7 +860,7 @@ fun TouchGestureLayer(
     }
 
     // Rate limiting to prevent Bluetooth L2CAP packet flooding
-    var lastReportTime by remember { mutableLongStateOf(0L) }
+    var lastReportTime by remember { PlainLong() }
 
     // Visual pointer (touchpad thumb) tracking states
     var isTouchActive by remember { mutableStateOf(false) }
@@ -926,7 +944,7 @@ fun TouchGestureLayer(
                                 accumulatedY += (pointer.position.y - lastPointY) * sensitivity
 
                                 val now = System.currentTimeMillis()
-                                if (now - lastReportTime >= 10L) {
+                                if (now - lastReportTime >= MOUSE_REPORT_INTERVAL_MS) {
                                     val sendX = accumulatedX.roundToInt().coerceIn(-127, 127)
                                     val sendY = accumulatedY.roundToInt().coerceIn(-127, 127)
 
@@ -983,7 +1001,7 @@ fun TouchGestureLayer(
                                 } else {
                                     accumulatedScrollY += (currentYAverage - lastTwoFingerY) * 0.06f * scrollSensitivity
                                     val now = System.currentTimeMillis()
-                                    if (now - lastReportTime >= 10L) {
+                                    if (now - lastReportTime >= MOUSE_REPORT_INTERVAL_MS) {
                                         val sendScroll = accumulatedScrollY.roundToInt().coerceIn(-127, 127)
                                         if (sendScroll != 0) {
                                             btManager.sendMouseReport(0, 0, 0, sendScroll.toByte())
@@ -1163,10 +1181,13 @@ fun TouchGestureLayer(
         // Draw touchpad thumbs for all active finger coordinates (Themed slate/gradient style)
         val thumbSize = 28.dp
         if (thumbActiveAlpha > 0.01f && !showNumpadLed) {
-            activeTouchPoints.forEach { point ->
+            repeat(touchCount.coerceAtMost(5)) { pointIndex ->
                 Box(
                     modifier = Modifier
                         .offset {
+                            // Read inside the layout lambda: finger movement re-lays out one box
+                            // instead of recomposing the whole touchpad on every MOVE event.
+                            val point = activeTouchPoints.getOrNull(pointIndex) ?: return@offset IntOffset.Zero
                             IntOffset(
                                 x = (point.x - with(density) { (thumbSize / 2).toPx() }).roundToInt(),
                                 y = (point.y - with(density) { (thumbSize / 2).toPx() }).roundToInt()

@@ -33,6 +33,8 @@ import androidx.compose.material.icons.automirrored.filled.VolumeOff
 import androidx.compose.material.icons.automirrored.filled.VolumeUp
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
+import androidx.compose.material.icons.filled.BrightnessHigh
+import androidx.compose.material.icons.filled.BrightnessLow
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
@@ -52,6 +54,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -76,6 +79,10 @@ import dev.arnv.bluke.QuickCycleActivity
 import dev.arnv.bluke.RemoteVolumeKeyHost
 import dev.arnv.bluke.bluetooth.BluetoothKeyboardManager
 import dev.arnv.bluke.bluetooth.ConsumerControl
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
+import kotlinx.coroutines.launch
 import kotlin.math.abs
 import kotlin.math.min
 
@@ -486,15 +493,30 @@ private fun MultimediaButtonDeck(
         }
 
         Column(verticalArrangement = Arrangement.spacedBy(verticalGap)) {
-            Row(
-                modifier = Modifier.width(buttonWidth * 3 + horizontalGap * 2),
-                horizontalArrangement = Arrangement.Center,
-            ) {
+            Row(horizontalArrangement = Arrangement.spacedBy(horizontalGap)) {
+                BrightnessButton(
+                    label = "Brightness down",
+                    icon = Icons.Default.BrightnessLow,
+                    delta = -ScreenBrightness.STEP,
+                    width = buttonWidth,
+                    height = buttonHeight,
+                    contentRotation = contentRotation,
+                    triggerVibration = triggerVibration,
+                )
                 MultimediaActionButton(
                     RemoteAction.Key("Up", Icons.Default.KeyboardArrowUp, KeyboardLayouts.KEY_UP),
                     btManager,
                     buttonWidth,
                     buttonHeight,
+                    triggerVibration = triggerVibration,
+                )
+                BrightnessButton(
+                    label = "Brightness up",
+                    icon = Icons.Default.BrightnessHigh,
+                    delta = ScreenBrightness.STEP,
+                    width = buttonWidth,
+                    height = buttonHeight,
+                    contentRotation = contentRotation,
                     triggerVibration = triggerVibration,
                 )
             }
@@ -781,6 +803,54 @@ private fun MultimediaActionButton(
             }
         },
     )
+}
+
+/** Changes the phone's own brightness; holding the button repeats the step. */
+@Composable
+private fun BrightnessButton(
+    label: String,
+    icon: ImageVector,
+    delta: Int,
+    width: Dp,
+    height: Dp,
+    contentRotation: Float,
+    triggerVibration: (Long) -> Unit,
+) {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    var repeatJob by remember { mutableStateOf<Job?>(null) }
+    DisposableEffect(Unit) { onDispose { repeatJob?.cancel() } }
+
+    Box(Modifier.width(width).height(height)) {
+        RemoteHoldButton(
+            label = label,
+            icon = icon,
+            modifier = Modifier.fillMaxSize(),
+            fillHeight = true,
+            showLabel = false,
+            contentRotation = contentRotation,
+            cornerRadius = 8.dp,
+            showBorder = false,
+            containerColor = RemoteButtonColor,
+            contentColor = RemoteContentColor,
+            onPressFeedback = { triggerVibration(15) },
+            onPressedChange = { pressed ->
+                repeatJob?.cancel()
+                repeatJob = null
+                if (pressed) {
+                    repeatJob = scope.launch {
+                        // Stop repeating when the permission screen had to be opened.
+                        if (!ScreenBrightness.change(context, delta)) return@launch
+                        delay(350)
+                        while (isActive) {
+                            ScreenBrightness.change(context, delta)
+                            delay(90)
+                        }
+                    }
+                }
+            },
+        )
+    }
 }
 
 private sealed interface RemoteAction {
