@@ -25,6 +25,7 @@ private val legacyDefaultModeKeys = setOf("keyboard", "touchpad", "gamepad")
 private const val REMOVED_MOUSE_MODE_KEY = "mouse"
 private const val REMOVED_KEYBOARD_TOUCHPAD_MODE_KEY = "keyboard_touchpad"
 val defaultInputModeKeys: Set<String> = InputMode.entries.filter { it != InputMode.GAMEPAD }.mapTo(linkedSetOf()) { it.preferenceKey }
+
 fun normalizeInputModeKeys(savedKeys: Set<String>?): Set<String> {
     val normalized = when {
         savedKeys == null || savedKeys == legacyDefaultModeKeys -> defaultInputModeKeys
@@ -35,7 +36,7 @@ fun normalizeInputModeKeys(savedKeys: Set<String>?): Set<String> {
                 else -> key
             }
         }.filterTo(linkedSetOf()) { key ->
-            InputMode.entries.any { it.preferenceKey == key }
+            InputMode.entries.any { it != InputMode.GAMEPAD && it.preferenceKey == key }
         }
     }
     return normalized.ifEmpty { setOf(InputMode.KEYBOARD.preferenceKey) }
