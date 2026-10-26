@@ -692,47 +692,20 @@ fun HomeScreen(
                                         )
                                     }
 
-                                    // Rotating Mode Switcher
-                                    Row(
-                                        modifier = Modifier
-                                            .height(28.dp)
-                                            .clip(RoundedCornerShape(6.dp))
-                                            .background(Color.White.copy(alpha = 0.15f))
-                                            .combinedClickable(
-                                                onClickLabel = "Next input mode",
-                                                onLongClickLabel = "Configure input mode cycle",
-                                                onClick = {
-                                                    val enabledModes = sharedPrefs.enabledInputModes().map(InputMode::id)
-                                                    val currentIndexInEnabled = enabledModes.indexOf(launchMode)
-                                                    val nextIndex = (currentIndexInEnabled + 1) % enabledModes.size
-                                                    val nextMode = enabledModes[nextIndex]
-                                                    switchInputMode(nextMode)
-                                                    if (isHapticsEnabled) {
-                                                        view.performHapticFeedback(android.view.HapticFeedbackConstants.LONG_PRESS)
-                                                    }
-                                                },
-                                                onLongClick = {
-                                                    context.startActivity(Intent(context, QuickCycleActivity::class.java))
-                                                },
-                                            )
-                                            .padding(horizontal = 8.dp)
-                                            .testTag("keyboard_mode_cycle_btn"),
-                                        verticalAlignment = Alignment.CenterVertically,
-                                        horizontalArrangement = Arrangement.spacedBy(4.dp)
-                                    ) {
-                                        Icon(
-                                            imageVector = Icons.Default.Keyboard,
-                                            contentDescription = "Switch Mode",
-                                            tint = Color.White,
-                                            modifier = Modifier.size(11.dp)
-                                        )
-                                        Text(
-                                            text = "Keyboard Mode",
-                                            color = Color.White,
-                                            fontSize = 9.sp,
-                                            fontWeight = FontWeight.Bold
-                                        )
-                                    }
+                                    // Mode selector: tap = pick from a list, swipe vertically = previous/next mode
+                                    ModeSwitchPill(
+                                        currentModeId = launchMode,
+                                        label = "Keyboard Mode",
+                                        icon = Icons.Default.Keyboard,
+                                        sharedPrefs = sharedPrefs,
+                                        onModeSelected = { newMode ->
+                                            switchInputMode(newMode)
+                                            if (isHapticsEnabled) {
+                                                view.performHapticFeedback(android.view.HapticFeedbackConstants.LONG_PRESS)
+                                            }
+                                        },
+                                        modifier = Modifier.testTag("keyboard_mode_cycle_btn"),
+                                    )
 
                                     // Status LED and connection details
                                     val statusLedColor = if (isConnected) Color(0xFF39FF14) else Color(0xFFFF9800)

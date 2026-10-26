@@ -168,45 +168,18 @@ fun TouchpadView(
                             )
                         }
 
-                        // Rotating Mode Switcher (cycles active connection modes)
-                        Row(
-                            modifier = Modifier
-                                .height(28.dp)
-                                .clip(RoundedCornerShape(6.dp))
-                                .background(Color.White.copy(alpha = 0.15f))
-                                .combinedClickable(
-                                    onClickLabel = "Next input mode",
-                                    onLongClickLabel = "Configure input mode cycle",
-                                    onClick = {
-                                        val enabledModes = sharedPrefs.enabledInputModes().map(InputMode::id)
-                                        val currentIndexInEnabled = enabledModes.indexOf(launchMode)
-                                        val nextIndex = (currentIndexInEnabled + 1) % enabledModes.size
-                                        val nextMode = enabledModes[nextIndex]
-                                        onModeChange(nextMode)
-                                        triggerVibration(25)
-                                    },
-                                    onLongClick = {
-                                        context.startActivity(Intent(context, QuickCycleActivity::class.java))
-                                    },
-                                )
-                                .padding(horizontal = 8.dp)
-                                .testTag("touchpad_mode_cycle_btn"),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(4.dp)
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Mouse,
-                                contentDescription = "Switch Mode",
-                                tint = Color.White,
-                                modifier = Modifier.size(11.dp)
-                            )
-                            Text(
-                                text = "Touchpad Mode",
-                                color = Color.White,
-                                fontSize = 9.sp,
-                                fontWeight = FontWeight.Bold
-                            )
-                        }
+                        // Mode selector: tap = pick from a list, swipe vertically = previous/next mode
+                        ModeSwitchPill(
+                            currentModeId = launchMode,
+                            label = "Touchpad Mode",
+                            icon = Icons.Default.Mouse,
+                            sharedPrefs = sharedPrefs,
+                            onModeSelected = { newMode ->
+                                onModeChange(newMode)
+                                triggerVibration(25)
+                            },
+                            modifier = Modifier.testTag("touchpad_mode_cycle_btn"),
+                        )
 
                         // Connection status
                         val connectedDevNow by btManager.connectedDevice.collectAsState()
@@ -915,6 +888,11 @@ fun TouchGestureLayer(
                                 pointerDownInfo[change.id] = change.uptimeMillis to change.position
                                 
                                 if (pointerDownInfo.size == 1) {
+                                    // An idle Bluetooth HID link may be in a low-power state; a harmless
+                                    // empty report as the finger lands wakes it before the first move.
+                                    if (!tapDrag.isArmed && activeMouseButton == 0.toByte()) {
+                                        btManager.sendMouseReport(0, 0, 0, 0)
+                                    }
                                     tapDrag.down(change.uptimeMillis, change.position.x, change.position.y)
                                 } else {
                                     tapDrag.cancel()
@@ -1172,49 +1150,43 @@ fun TouchGestureLayer(
             }
         }
 
-        // Draw touchpad thumbs for all active finger coordinates (Themed slate/gradient style)
-        val thumbSize = 28.dp
-        if (thumbActiveAlpha > 0.01f && !showNumpadLed) {
-            repeat(touchCount.coerceAtMost(5)) { pointIndex ->
-                Box(
-                    modifier = Modifier
-                        .offset {
-                            // Read inside the layout lambda: finger movement re-lays out one box
-                            // instead of recomposing the whole touchpad on every MOVE event.
-                            val point = activeTouchPoints.getOrNull(pointIndex) ?: return@offset IntOffset.Zero
-                            IntOffset(
-                                x = (point.x - with(density) { (thumbSize / 2).toPx() }).roundToInt(),
-                                y = (point.y - with(density) { (thumbSize / 2).toPx() }).roundToInt()
-                            )
-                        }
-                        .size(thumbSize)
-                        .graphicsLayer {
-                            scaleX = thumbScale
-                            scaleY = thumbScale
-                            alpha = thumbActiveAlpha
-                        }
-                        .shadow(
-                            elevation = 4.dp,
-                            shape = CircleShape,
-                            clip = false,
-                            ambientColor = Color.Black,
-                            spotColor = Color.Black.copy(alpha = 0.5f)
-                        )
-                        .background(
-                            brush = Brush.verticalGradient(
-                                colors = listOf(Color(0xFF38383B), Color(0xFF232325))
-                            ),
-                            shape = CircleShape
-                        )
-                        .border(1.dp, Color.White.copy(alpha = 0.12f), CircleShape),
-                    contentAlignment = Alignment.Center
-                ) {
-                    // Subtle inner core
-                    Box(
-                        modifier = Modifier
-                            .size(6.dp)
-                            .clip(CircleShape)
-                            .background(Color.White.copy(alpha = 0.25f))
+        // Touch indicators are drawn in the draw phase: landing or moving a finger never
+        // composes or lays out anything new, so the very first touch costs no extra frame.
+        if (!showNumpadLed) {
+            androidx.compose.foundation.Canvas(Modifier.fillMaxSize()) {
+                val alpha = thumbActiveAlpha
+                if (alpha <= 0.01f) return@Canvas
+                val radius = 14.dp.toPx() * thumbScale
+                val core = 3.dp.toPx() * thumbScale
+                val shadowOffset = 2.dp.toPx()
+                val points = activeTouchPoints
+                for (i in 0 until minOf(points.size, 5)) {
+                    val c = points[i]
+                    drawCircle(
+                        color = Color.Black.copy(alpha = 0.35f * alpha),
+                        radius = radius + 1.dp.toPx(),
+                        center = Offset(c.x, c.y + shadowOffset),
+                    )
+                    drawCircle(
+                        brush = Brush.verticalGradient(
+                            colors = listOf(Color(0xFF38383B), Color(0xFF232325)),
+                            startY = c.y - radius,
+                            endY = c.y + radius,
+                        ),
+                        radius = radius,
+                        center = c,
+                        alpha = alpha,
+                    )
+                    drawCircle(
+                        color = Color.White.copy(alpha = 0.12f * alpha),
+                        radius = radius,
+                        center = c,
+                        style = androidx.compose.ui.graphics.drawscope.Stroke(width = 1.dp.toPx()),
+                    )
+                    drawCircle(
+                        color = Color.White.copy(alpha = 0.25f * alpha),
+                        radius = core,
+                        center = c,
                     )
                 }
             }

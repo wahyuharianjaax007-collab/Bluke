@@ -244,11 +244,6 @@ internal fun MediaPresentationView(
         sharedPrefs.edit { putFloat("touchpad_scroll_sensitivity", scrollSensitivity) }
         triggerVibration(15)
     }
-    val cycleMode = {
-        val enabled = sharedPrefs.enabledInputModes()
-        val index = enabled.indexOfFirst { it.id == launchMode }.coerceAtLeast(0)
-        onModeChange(enabled[(index + 1) % enabled.size].id)
-    }
     val toggleVibration = {
         isVibrationEnabled = !isVibrationEnabled
         sharedPrefs.edit { putBoolean("touchpad_vibration_enabled", isVibrationEnabled) }
@@ -314,7 +309,9 @@ internal fun MediaPresentationView(
             MultimediaUprightBar(
                 btManager = btManager,
                 onClose = onClose,
-                onModeChange = cycleMode,
+                launchMode = launchMode,
+                sharedPrefs = sharedPrefs,
+                onModeChange = onModeChange,
                 isConnected = isConnected,
                 sensitivity = sensitivity,
                 onSensitivityChange = cycleSensitivity,
@@ -852,7 +849,9 @@ private val portraitHeldMediaRows = listOf(
 private fun MultimediaUprightBar(
     btManager: BluetoothKeyboardManager,
     onClose: () -> Unit,
-    onModeChange: () -> Unit,
+    launchMode: Int,
+    sharedPrefs: SharedPreferences,
+    onModeChange: (Int) -> Unit,
     isConnected: Boolean,
     sensitivity: Float,
     onSensitivityChange: () -> Unit,
@@ -873,8 +872,22 @@ private fun MultimediaUprightBar(
         UprightToolbarButton("Close Multimedia", onClose) {
             Icon(Icons.Default.Close, null, tint = Color.White, modifier = Modifier.size(13.dp))
         }
-        UprightToolbarButton("Switch input mode", onModeChange) {
-            Icon(Icons.Default.Mouse, null, tint = Color.White, modifier = Modifier.size(13.dp))
+        var modeMenuOpen by remember { mutableStateOf(false) }
+        Box {
+            UprightToolbarButton(
+                "Switch input mode",
+                { modeMenuOpen = true },
+                modifier = Modifier.modeSwipe(launchMode, sharedPrefs, onModeChange),
+            ) {
+                Icon(Icons.Default.Mouse, null, tint = Color.White, modifier = Modifier.size(13.dp))
+            }
+            ModeDropdown(
+                expanded = modeMenuOpen,
+                onDismiss = { modeMenuOpen = false },
+                currentModeId = launchMode,
+                sharedPrefs = sharedPrefs,
+                onModeSelected = onModeChange,
+            )
         }
         Box(
             Modifier
@@ -923,11 +936,12 @@ private fun MultimediaUprightBar(
 private fun UprightToolbarButton(
     description: String,
     onClick: () -> Unit,
+    modifier: Modifier = Modifier,
     content: @Composable () -> Unit,
 ) {
     Surface(
         onClick = onClick,
-        modifier = Modifier
+        modifier = modifier
             .size(34.dp)
             .semantics { contentDescription = description },
         color = Color.White.copy(alpha = 0.15f),
@@ -976,20 +990,17 @@ private fun MultimediaTopBar(
                     Spacer(Modifier.width(4.dp))
                     Text("Close", color = Color.White, fontSize = 10.sp, fontWeight = FontWeight.Bold)
                 }
-                ToolbarPill(
-                    onClick = {
-                        val enabled = sharedPrefs.enabledInputModes()
-                        val index = enabled.indexOfFirst { it.id == launchMode }.coerceAtLeast(0)
-                        onModeChange(enabled[(index + 1) % enabled.size].id)
-                    },
-                    onLongClick = {
-                        context.startActivity(Intent(context, QuickCycleActivity::class.java))
-                    },
-                ) {
-                    Icon(Icons.Default.Mouse, "Switch mode", tint = Color.White, modifier = Modifier.size(12.dp))
-                    Spacer(Modifier.width(4.dp))
-                    Text("Multimedia", color = Color.White, fontSize = 10.sp, fontWeight = FontWeight.Bold)
-                }
+                ModeSwitchPill(
+                    currentModeId = launchMode,
+                    label = "Multimedia",
+                    icon = Icons.Default.Mouse,
+                    sharedPrefs = sharedPrefs,
+                    onModeSelected = onModeChange,
+                    cornerRadius = 8.dp,
+                    horizontalPadding = 9.dp,
+                    iconSize = 12.dp,
+                    fontSize = 10.sp,
+                )
                 Box(
                     Modifier
                         .size(7.dp)
